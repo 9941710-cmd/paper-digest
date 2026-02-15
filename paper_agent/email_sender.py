@@ -1,66 +1,71 @@
-import smtplib
-import logging
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from email.mime.application import MIMEApplication
-from jinja2 import Environment, FileSystemLoader
 import os
-import datetime
-from . import config, pdf_generator
+import base64
+from typing import List, Dict
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition
 
-logger = logging.getLogger(__name__)
+def _build_subject() -> str:
+    return "Daily Paper Digest"
 
-def send_email(papers):
+def _build_html(papers: List[Dict]) -> str:
+    # 既存のHTML生成があるならそれを使ってOK。なければ最低限で。
+    lines = ["<h2>Daily Paper Digest</h2>"]
+    for i, p in enumerate(papers, 1):
+        title = p.get("title_jp") or p.get("title") or "(no title)"
+        link = p.get("link", "")
+        lines.append(f"<h3>{i}. {title}</h3>")
+        if link:
+            lines.append(f'<p><a href="{link}">{link}</a></p>')
+        for k in ["background","purpose","conditions","methods","results","significance","implications"]:
+            v = p.get(k)
+            if v:
+                lines.append(f"<p><b>{k}:</b><br>{str(v).replace(chr(10), '<br>')}</p>")
+        lines.append("<hr>")
+    return "\n".join(lines)
+
+def send_email(papers: List[Dict], pdf_path: str | None = None) -> None:
     """
-    Send an HTML email with the summarized papers and PDF attachment.
+    Env:
+      SENDGRID_API_KEY (required)
+      EMAIL_ADDRESS (From, verified in SendGrid)
+      RECIPIENT_EMAIL (To)
     """
-    if not papers:
-        logger.info("No papers to send.")
-        return
+    api_key = os.getenv("SENDGRID_API_KEY")
+    from_email = os.getenv("EMAIL_ADDRESS")
+    to_email = os.getenv("RECIPIENT_EMAIL")
 
-    # Load template
-    template_dir = os.path.join(os.path.dirname(__file__), 'templates')
-    env = Environment(loader=FileSystemLoader(template_dir))
-    template = env.get_template('email_template.html')
-    
-    # Render HTML
-    today_str = datetime.date.today().strftime("%Y-%m-%d")
-    html_content = template.render(
-        papers=papers,
-        date=today_str,
-        paper_count=len(papers)
+    if not api_key:
+        raise RuntimeError("SENDGRID_API_KEY is missing")
+    if not from_email:
+        raise RuntimeError("EMAIL_ADDRESS (From) is missing")
+    if not to_email:
+        raise RuntimeError("RECIPIENT_EMAIL is missing")
+
+    subject = _build_subject()
+    html = _build_html(papers)
+
+    message = Mail(
+        from_email=from_email,
+        to_emails=to_email,
+        subject=subject,
+        html_content=html
     )
-    
-    # Setup Email
-    msg = MIMEMultipart('mixed') # Change to mixed for attachments
-    msg['Subject'] = f"【論文要約】{today_str} 最新プロセス技術論文 ({len(papers)}本)"
-    msg['From'] = config.EMAIL_ADDRESS
-    msg['To'] = config.RECIPIENT_EMAIL
-    
-    # Attach HTML Body
-    # In mixed multipart, text parts should be nested in 'alternative' part if we had plain text too.
-    # But for simplicity, attaching html directly or inside alternative.
-    msg_body = MIMEMultipart('alternative')
-    part_html = MIMEText(html_content, 'html')
-    msg_body.attach(part_html)
-    msg.attach(msg_body)
-    
-    # Generate and Attach PDF
-    try:
-        pdf_buffer = pdf_generator.generate_pdf(papers)
-        pdf_attachment = MIMEApplication(pdf_buffer.read(), _subtype="pdf")
-        pdf_filename = f"papers_{datetime.date.today().strftime('%Y%m%d')}.pdf"
-        pdf_attachment.add_header('Content-Disposition', 'attachment', filename=pdf_filename)
-        msg.attach(pdf_attachment)
-        logger.info("PDF generated and attached.")
-    except Exception as e:
-        logger.error(f"Failed to generate/attach PDF: {e}")
-    
-    # Send
-    try:
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-            server.login(config.EMAIL_ADDRESS, config.EMAIL_PASSWORD)
-            server.sendmail(config.EMAIL_ADDRESS, config.RECIPIENT_EMAIL, msg.as_string())
-        logger.info(f"Email sent successfully to {config.RECIPIENT_EMAIL}")
-    except Exception as e:
-        logger.error(f"Failed to send email: {e}")
+
+    # PDF添付（ある場合）
+    if pdf_path and os.path.exists(pdf_path):
+        with open(pdf_path, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode("utf-8")
+        attachment = Attachment(
+            FileContent(encoded),
+            FileName(os.path.basename(pdf_path)),
+            FileType("application/pdf"),
+            Disposition("attachment"),
+        )
+        message.attachment = attachment
+
+    sg = SendGridAPIClient(api_key)
+    resp = sg.send(message)
+
+    # 送信できてないのに緑になるのを防ぐ（失敗時は落とす）
+    if resp.status_code >= 300:
+        raise RuntimeError(f"SendGrid send failed: {resp.status_code} {resp.body}")
