@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Optional, List, Dict, Optional
+from typing import Optional, List, Dict
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -80,5 +80,6 @@ def send_email(papers: List[Dict], pdf_path: Optional[str] = None) -> None:
 
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode("utf-8")
     service.users().messages().send(userId="me", body={"raw": raw}).execute()
+
 
 
