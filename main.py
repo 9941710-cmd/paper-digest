@@ -3,14 +3,12 @@ import datetime as dt
 import logging
 import os
 import re
-import sys
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 
-# あなたのGmail API送信（完成したやつ）
 from paper_agent import email_sender
 
 logger = logging.getLogger(__name__)
@@ -20,39 +18,41 @@ logging.basicConfig(
 )
 
 # -----------------------------
-# 設定
+# Settings
 # -----------------------------
 MAX_PAPERS_PER_DAY = 5
 
-# 優先トピック（日本語/英語混在OK）
-KEYWORDS = [
-    # ALD / PEALD
-    "ALD", "atomic layer deposition", "PEALD", "plasma-enhanced ALD",
-    # NLD-RIE（ユーザーがよく使う表記を広めに）
-    "NLD", "NLD-RIE", "neutral loop discharge", "neutral loop discharge RIE",
-    "RIE", "reactive ion etching", "plasma etching",
-    # metasurface process
-    "metasurface", "metasurfaces", "meta-surface",
-    "nanofabrication", "lithography", "nanoimprint", "NIL",
-    # TiO2 & microstructure
-    "TiO2", "titania", "titanium dioxide",
-    "nanostructure", "nanostructured", "microstructure", "micro-structure",
-    "high aspect ratio", "HAR", "conformal", "step coverage",
+# プロセス寄りに絞ったカテゴリ（通信・制御・ネットワーク系は外す）
+ARXIV_CATEGORIES = [
+    "cond-mat.mtrl-sci",   # 材料
+    "physics.app-ph",      # 応用物理（プロセス/デバイス）
+    "cond-mat.other",      # その他物性（薄膜/材料が混ざる）
+    "physics.ins-det",     # 装置/計測（プロセス装置/評価が混ざる）
 ]
 
-# arXivクエリ：材料/ナノ/応用物理あたりを広めに
-ARXIV_CATEGORIES = [
-    "cond-mat.mtrl-sci",
-    "cond-mat.mes-hall",
-    "physics.app-ph",
-    "physics.ins-det",
-    "eess.SP",
-    "eess.SY",
-    "cs.NI",
+# 「これが入ってない論文は基本的に要らない」必須語（ノイズ除去の要）
+MUST_HAVE = [
+    "atomic layer deposition", "ald", "peald",
+    "etch", "etching", "plasma etching", "reactive ion etching", "rie",
+    "nanoimprint", "nil", "lithography", "patterning",
+    "tio2", "titania", "titanium dioxide",
+    "thin film", "thin-film", "deposition",
+    "metasurface",
 ]
+
+# 明確に除外したいノイズ（通信/最適化/学習など）
+# ※プロセス論文にも "optimization" が入ることはあるので、強すぎない語は入れない
+EXCLUDE_IF_TITLE_MATCH = [
+    "ris", "reconfigurable intelligent surface", "beamforming",
+    "wireless", "mimo", "channel", "antenna", "trajectory-aware",
+    "diffusion model", "denoising diffusion", "reinforcement learning",
+]
+
+# OpenAI要約（任意）
+OPENAI_MODEL_DEFAULT = "gpt-4o-mini"
 
 # -----------------------------
-# データ構造
+# Data Model
 # -----------------------------
 @dataclass
 class Paper:
@@ -63,7 +63,6 @@ class Paper:
     abstract: str
     source: str = "arXiv"
 
-    # 要約結果（入ればメールに載る）
     background: str = ""
     purpose: str = ""
     conditions: str = ""
@@ -74,33 +73,69 @@ class Paper:
 
 
 # -----------------------------
-# Utility
+# Utils
 # -----------------------------
 def _normalize_text(s: str) -> str:
-    s = re.sub(r"\s+", " ", s).strip()
-    return s
+    return re.sub(r"\s+", " ", (s or "")).strip()
+
+
+def _title_excluded(title: str) -> bool:
+    t = (title or "").lower()
+    return any(bad in t for bad in EXCLUDE_IF_TITLE_MATCH)
+
+
+def _has_must_have(title: str, abstract: str) -> bool:
+    t = (title + " " + abstract).lower()
+    return any(m in t for m in MUST_HAVE)
 
 
 def _keyword_score(text: str) -> int:
+    """
+    プロセス論文が上に来るように強く加点する。
+    """
     t = text.lower()
     score = 0
-    for kw in KEYWORDS:
-        if kw.lower() in t:
-            # 重要語を少し重め（ざっくり）
-            if kw.lower() in ["ald", "peald", "tio2", "metasurface", "nld-rie", "nld"]:
-                score += 5
-            else:
-                score += 1
+
+    # 強い優先（プロセスど真ん中）
+    strong = [
+        "atomic layer deposition", "ald", "peald",
+        "etching", "plasma etching", "reactive ion etching", "rie",
+        "nanoimprint", "nil", "lithography",
+        "tio2", "titania", "titanium dioxide",
+        "conformal", "step coverage", "high aspect ratio",
+        "thin film", "thin-film", "deposition",
+        "mask", "selectivity", "anisotropic", "isotropic",
+        "tdmat", "temat", "tma", "ozone", "o3", "o2 plasma",
+    ]
+    for s in strong:
+        if s in t:
+            score += 8
+
+    # 中くらい（評価・周辺語）
+    medium = [
+        "xps", "ellipsometry", "xrr", "xrd",
+        "sem", "tem", "afm", "profilometry",
+        "gpc", "growth per cycle",
+        "refractive index", "density",
+        "etch rate", "etch profile",
+        "nanofabrication", "patterning",
+        "metasurface", "metasurfaces",
+    ]
+    for m in medium:
+        if m in t:
+            score += 2
+
     return score
 
 
+# -----------------------------
+# arXiv Fetch
+# -----------------------------
 def _parse_arxiv_atom(xml_bytes: bytes) -> List[Paper]:
-    ns = {
-        "atom": "http://www.w3.org/2005/Atom",
-        "arxiv": "http://arxiv.org/schemas/atom",
-    }
+    ns = {"atom": "http://www.w3.org/2005/Atom"}
     root = ET.fromstring(xml_bytes)
     papers: List[Paper] = []
+
     for entry in root.findall("atom:entry", ns):
         title = _normalize_text(entry.findtext("atom:title", default="", namespaces=ns))
         summary = _normalize_text(entry.findtext("atom:summary", default="", namespaces=ns))
@@ -135,15 +170,12 @@ def _parse_arxiv_atom(xml_bytes: bytes) -> List[Paper]:
     return papers
 
 
-def fetch_arxiv_papers(days_back: int = 3, max_results: int = 100) -> List[Paper]:
+def fetch_arxiv_papers(days_back: int = 21, max_results: int = 200) -> List[Paper]:
     """
-    直近days_back日くらいの範囲で、カテゴリ横断で拾う（arXiv APIは範囲指定が弱いので多めに取得→後で絞る）。
+    広めに取得 → must-have & スコアでプロセス寄りに絞る。
     """
-    # キーワードは arXiv query にも入れて、ある程度絞る（完全一致じゃなくても拾える）
-    # arXivクエリ例：all:"atomic layer deposition" OR all:ALD ...
-    kw_query = " OR ".join([f'all:"{kw}"' if " " in kw else f"all:{kw}" for kw in KEYWORDS[:25]])
     cat_query = " OR ".join([f"cat:{c}" for c in ARXIV_CATEGORIES])
-    query = f"({cat_query}) AND ({kw_query})"
+    query = f"({cat_query})"
 
     params = {
         "search_query": query,
@@ -153,7 +185,7 @@ def fetch_arxiv_papers(days_back: int = 3, max_results: int = 100) -> List[Paper
         "sortOrder": "descending",
     }
     url = "http://export.arxiv.org/api/query?" + urllib.parse.urlencode(params)
-    logger.info("Fetching arXiv: %s", url)
+    logger.info("Fetching arXiv (process-focused): %s", url)
 
     req = urllib.request.Request(url, headers={"User-Agent": "paper-digest-agent/1.0"})
     with urllib.request.urlopen(req, timeout=30) as resp:
@@ -161,12 +193,10 @@ def fetch_arxiv_papers(days_back: int = 3, max_results: int = 100) -> List[Paper
 
     papers = _parse_arxiv_atom(xml_bytes)
 
-    # days_backで絞る
     cutoff = dt.datetime.utcnow() - dt.timedelta(days=days_back)
     filtered: List[Paper] = []
     for p in papers:
         try:
-            # published: 2026-02-15T12:34:56Z
             pub_dt = dt.datetime.fromisoformat(p.published.replace("Z", "+00:00")).replace(tzinfo=None)
         except Exception:
             pub_dt = None
@@ -178,117 +208,133 @@ def fetch_arxiv_papers(days_back: int = 3, max_results: int = 100) -> List[Paper
 
 
 def select_top_papers(papers: List[Paper], n: int = MAX_PAPERS_PER_DAY) -> List[Paper]:
-    scored = []
+    # まずタイトル除外（通信/最適化系が混ざるのを強く防ぐ）
+    papers = [p for p in papers if not _title_excluded(p.title)]
 
+    # must-haveで門前払い（これが効く）
+    papers_must = [p for p in papers if _has_must_have(p.title, p.abstract)]
+    if papers_must:
+        papers = papers_must  # mustに引っかかったものがあるなら、それだけで勝負
+    # mustが0件のときだけ、完全ゼロ回避のために元のpapersを使う
+
+    scored: List[Tuple[int, str, Paper]] = []
     for p in papers:
         text = f"{p.title}\n{p.abstract}"
         score = _keyword_score(text)
         pub_key = p.published or ""
         scored.append((score, pub_key, p))
 
-    # スコア優先 → 新しい順
     scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
 
-    selected = []
+    selected: List[Paper] = []
     seen = set()
 
-    # まずキーワードヒット優先
+    # まずスコア>0を優先
     for score, _, p in scored:
-        if score > 0:
-            if p.title not in seen:
-                selected.append(p)
-                seen.add(p.title)
-            if len(selected) >= n:
-                return selected
+        if score <= 0:
+            continue
+        if p.title in seen:
+            continue
+        selected.append(p)
+        seen.add(p.title)
+        if len(selected) >= n:
+            return selected
 
-    # 足りなければ最新から埋める
+    # 足りなければ最新から埋める（毎日届かないのを防ぐ）
     for _, _, p in scored:
-        if p.title not in seen:
-            selected.append(p)
-            seen.add(p.title)
+        if p.title in seen:
+            continue
+        selected.append(p)
+        seen.add(p.title)
         if len(selected) >= n:
             break
 
     return selected
 
 
-
 # -----------------------------
-# 要約（OpenAIは任意）
+# Summarization (Optional OpenAI)
 # -----------------------------
 def summarize_with_openai(p: Paper) -> None:
+    """
+    OPENAI_API_KEYが無ければabstract整形。
+    429/クォータ不足でも落とさずabstractで続行。
+    """
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        # ない場合はabstractから最低限の“整形”だけ
-        p.background = ""
-        p.purpose = ""
-        p.conditions = ""
-        p.methods = ""
-        p.results = _normalize_text(p.abstract)[:1200]
-        p.significance = ""
-        p.implications = ""
+        p.results = _normalize_text(p.abstract)[:1500]
         return
 
-    # 遅延import（APIキーなしでも動くように）
-    from openai import OpenAI
+    try:
+        from openai import OpenAI
+        from openai import RateLimitError
+    except Exception:
+        # ライブラリが入ってない等
+        p.results = _normalize_text(p.abstract)[:1500]
+        return
+
     client = OpenAI(api_key=api_key)
 
     system = (
-        "あなたは半導体プロセス分野の研究アシスタントです。"
-        "入力された論文のタイトルと要旨から、研究者向けに日本語で技術要約してください。"
-        "推測は最小限にし、要旨にある事実を中心に、具体的に書いてください。"
-        "必ず次の見出しで出力してください：\n"
+        "あなたは半導体プロセス分野（成膜・エッチング・リソグラフィ・プロセス統合）の研究アシスタントです。"
+        "タイトルと要旨から、研究者向けに日本語で技術要約してください。"
+        "推測は最小限にし、要旨に基づく内容を具体的に。\n"
+        "必ず次の見出しで出力:\n"
         "背景:\n目的:\n実験条件:\n手法:\n結果:\n意義:\n今後の示唆:\n"
+        "特に『成膜条件/プラズマ条件/ガス/温度/圧力/パワー/評価手法/膜質/プロファイル』があれば優先して書く。"
     )
-
     user = f"タイトル:\n{p.title}\n\n要旨:\n{p.abstract}\n\nリンク:\n{p.link}\n"
 
-    resp = client.chat.completions.create(
-        model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-        temperature=0.3,
-    )
-    text = resp.choices[0].message.content or ""
+    try:
+        resp = client.chat.completions.create(
+            model=os.getenv("OPENAI_MODEL", OPENAI_MODEL_DEFAULT),
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            temperature=0.3,
+        )
+        text = resp.choices[0].message.content or ""
+    except RateLimitError:
+        # クォータ不足でも落とさない
+        p.results = _normalize_text(p.abstract)[:1500]
+        return
+    except Exception:
+        p.results = _normalize_text(p.abstract)[:1500]
+        return
 
-    # 見出しでざっくり分解
     def grab(section: str) -> str:
-        m = re.search(rf"{section}:\s*(.*?)(?=\n[A-Za-zぁ-んァ-ン一-龥]+?:|\Z)", text, re.S)
+        m = re.search(rf"{section}:\s*(.*?)(?=\n[^\n]+?:|\Z)", text, re.S)
         return _normalize_text(m.group(1)) if m else ""
 
     p.background = grab("背景")
     p.purpose = grab("目的")
     p.conditions = grab("実験条件")
     p.methods = grab("手法")
-    p.results = grab("結果")
+    p.results = grab("結果") or _normalize_text(p.abstract)[:1500]
     p.significance = grab("意義")
     p.implications = grab("今後の示唆")
 
 
 # -----------------------------
-# ジョブ本体
+# Job
 # -----------------------------
 def job() -> None:
-    papers = fetch_arxiv_papers(days_back=14, max_results=200)
+    # 広めに取る（プロセス寄りに絞っても、母数が必要）
+    papers = fetch_arxiv_papers(days_back=21, max_results=200)
     selected = select_top_papers(papers, n=MAX_PAPERS_PER_DAY)
-  
-
 
     logger.info("Selected %d papers", len(selected))
 
-    # 要約（OpenAIがあるなら生成、無ければabstract整形）
     for i, p in enumerate(selected, 1):
-        logger.info("Summarizing %d/%d: %s", i, len(selected), p.title[:80])
+        logger.info("Summarizing %d/%d: %s", i, len(selected), p.title[:90])
         summarize_with_openai(p)
 
-    # email_senderが期待するdict形式へ
     payload: List[Dict] = []
     for p in selected:
         payload.append({
             "title": p.title,
-            "title_jp": "",  # 必要なら後で翻訳を追加
+            "title_jp": "",
             "link": p.link,
             "authors": p.authors,
             "source": p.source,
@@ -302,27 +348,34 @@ def job() -> None:
             "implications": p.implications,
         })
 
-    subject = f"Daily Paper Digest ({dt.date.today().isoformat()})"
+    # 0件でも空メールにならないように必ず何か入れる
+    if not payload:
+        payload = [{
+            "title": "本日の条件に合う論文が見つかりませんでした（0件）",
+            "link": "",
+            "results": "カテゴリ/必須語の条件が厳しすぎる可能性があります。MUST_HAVE/カテゴリを調整してください。",
+        }]
+
+    subject = f"Daily Paper Digest (Process) {dt.date.today().isoformat()}"
     email_sender.send_email(payload, subject=subject)
     logger.info("Email sent.")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Daily Paper Search & Email Agent (GitHub Actions Ready)")
+    parser = argparse.ArgumentParser(description="Daily Paper Digest (Process-focused, Gmail API)")
     parser.add_argument("--test-email", action="store_true", help="Send a test email with dummy data")
     args = parser.parse_args()
 
     logger.info("Agent started (CLI Mode).")
 
     if args.test_email:
-        logger.info("Sending test email...")
         dummy = [{
-            "title": "Test Paper Title: Advanced ALD Process for High-k Dielectrics",
-            "title_jp": "高誘電率膜のための先進的ALDプロセス",
+            "title": "Test Paper: PEALD TiO2 on High-Aspect-Ratio Structures",
+            "title_jp": "（テスト）高アスペクト比構造へのPEALD TiO2",
             "link": "https://example.com",
             "authors": ["Taro Yamada", "Hanako Suzuki"],
             "source": "Test Source",
-            "published": "2024-01-01",
+            "published": "2026-02-15",
             "background": "（テスト）背景",
             "purpose": "（テスト）目的",
             "conditions": "（テスト）条件",
@@ -339,6 +392,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
-
