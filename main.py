@@ -264,8 +264,16 @@ def summarize_with_openai(p: Paper) -> None:
 # ジョブ本体
 # -----------------------------
 def job() -> None:
-    papers = fetch_arxiv_papers(days_back=3, max_results=80)
+    papers = fetch_arxiv_papers(days_back=14, max_results=200)
     selected = select_top_papers(papers, n=MAX_PAPERS_PER_DAY)
+    # 足りなければ最新で埋める
+        if len(selected) < n:
+            for _, _, p in scored:
+                if p not in selected:
+                    selected.append(p)
+                if len(selected) >= n:
+                    break
+
 
     logger.info("Selected %d papers", len(selected))
 
@@ -330,3 +338,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
