@@ -178,32 +178,39 @@ def fetch_arxiv_papers(days_back: int = 3, max_results: int = 100) -> List[Paper
 
 
 def select_top_papers(papers: List[Paper], n: int = MAX_PAPERS_PER_DAY) -> List[Paper]:
-    # スコア：キーワード一致 + 新しさを軽く優遇
-    scored: List[Tuple[int, str, Paper]] = []
+    scored = []
+
     for p in papers:
         text = f"{p.title}\n{p.abstract}"
         score = _keyword_score(text)
-
-        # 新しさ（publishedが新しいほど加点）
         pub_key = p.published or ""
         scored.append((score, pub_key, p))
 
-    # score desc, published desc
+    # スコア優先 → 新しい順
     scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
 
-    # 同タイトル重複除去
+    selected = []
     seen = set()
-    selected: List[Paper] = []
+
+    # まずキーワードヒット優先
     for score, _, p in scored:
-        t = p.title.lower()
-        if t in seen:
-            continue
-        seen.add(t)
-        selected.append(p)
+        if score > 0:
+            if p.title not in seen:
+                selected.append(p)
+                seen.add(p.title)
+            if len(selected) >= n:
+                return selected
+
+    # 足りなければ最新から埋める
+    for _, _, p in scored:
+        if p.title not in seen:
+            selected.append(p)
+            seen.add(p.title)
         if len(selected) >= n:
             break
 
     return selected
+
 
 
 # -----------------------------
@@ -338,4 +345,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 
