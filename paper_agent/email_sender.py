@@ -15,18 +15,16 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 def _get_credentials() -> Credentials:
     creds: Optional[Credentials] = None
 
-    # GitHub Actions: SecretのJSONをそのまま使う
-    if os.getenv("GMAIL_TOKEN"):
-        creds = Credentials.from_authorized_user_info(
-            json.loads(os.getenv("GMAIL_TOKEN")),
-            SCOPES
-        )
+    # GitHub Actions: Secretに token.json の中身(JSON文字列)を入れて使う
+    gmail_token = os.getenv("GMAIL_TOKEN")
+    if gmail_token:
+        creds = Credentials.from_authorized_user_info(json.loads(gmail_token), SCOPES)
 
-    # ローカル: token.json を使う
+    # ローカル: token.json があればそれを使う
     elif os.path.exists("token.json"):
         creds = Credentials.from_authorized_user_file("token.json", SCOPES)
 
-    # 初回（ローカル）: credentials.json でOAuthして token.json を作る
+    # 初回ローカル: credentials.json でOAuthして token.json を作る
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
@@ -49,8 +47,9 @@ def _build_text(papers: List[Dict]) -> str:
         lines.append(f"{i}. {title}")
         if link:
             lines.append(link)
-        # 主要フィールド（あれば）
-        for k, label in [
+
+        # あるものだけ出す（長文OK）
+        fields = [
             ("background", "背景"),
             ("purpose", "目的"),
             ("conditions", "条件"),
@@ -58,10 +57,12 @@ def _build_text(papers: List[Dict]) -> str:
             ("results", "結果"),
             ("significance", "意義"),
             ("implications", "示唆"),
-        ]:
+        ]
+        for k, label in fields:
             v = p.get(k)
             if v:
                 lines.append(f"{label}: {v}")
+
         lines.append("")
     return "\n".join(lines)
 
