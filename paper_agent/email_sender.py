@@ -9,46 +9,36 @@ from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
-
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
+
 
 def _get_credentials() -> Credentials:
     creds: Optional[Credentials] = None
 
-    # ① GitHub（Secret経由）
+    # GitHub Actions: SecretのJSONをそのまま使う
     if os.getenv("GMAIL_TOKEN"):
         creds = Credentials.from_authorized_user_info(
             json.loads(os.getenv("GMAIL_TOKEN")),
             SCOPES
         )
 
-    # ② ローカル token.json
+    # ローカル: token.json を使う
     elif os.path.exists("token.json"):
-        creds = Credentials.from_authorized_user_file(
-            "token.json",
-            SCOPES
-        )
+        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
 
-    # ③ 初回ローカル認証
+    # 初回（ローカル）: credentials.json でOAuthして token.json を作る
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                "credentials.json",
-                SCOPES
-            )
+            if not os.path.exists("credentials.json"):
+                raise RuntimeError("credentials.json が見つかりません（academic直下に置いてください）")
+            flow = InstalledAppFlow.from_client_secrets_file("credentials.json", SCOPES)
             creds = flow.run_local_server(port=0)
-
             with open("token.json", "w", encoding="utf-8") as f:
                 f.write(creds.to_json())
 
     return creds
-
-
-
-def _build_subject() -> str:
-    return "Daily Paper Digest"
 
 
 def _build_text(papers: List[Dict]) -> str:
@@ -59,11 +49,24 @@ def _build_text(papers: List[Dict]) -> str:
         lines.append(f"{i}. {title}")
         if link:
             lines.append(link)
+        # 主要フィールド（あれば）
+        for k, label in [
+            ("background", "背景"),
+            ("purpose", "目的"),
+            ("conditions", "条件"),
+            ("methods", "手法"),
+            ("results", "結果"),
+            ("significance", "意義"),
+            ("implications", "示唆"),
+        ]:
+            v = p.get(k)
+            if v:
+                lines.append(f"{label}: {v}")
         lines.append("")
     return "\n".join(lines)
 
 
-def send_email(papers: List[Dict], pdf_path: Optional[str] = None) -> None:
+def send_email(papers: List[Dict], subject: str = "Daily Paper Digest") -> None:
     recipient = os.getenv("RECIPIENT_EMAIL")
     if not recipient:
         raise RuntimeError("RECIPIENT_EMAIL is missing")
@@ -74,18 +77,8 @@ def send_email(papers: List[Dict], pdf_path: Optional[str] = None) -> None:
     msg = EmailMessage()
     msg["To"] = recipient
     msg["From"] = "me"
-    msg["Subject"] = _build_subject()
+    msg["Subject"] = subject
     msg.set_content(_build_text(papers))
-
-    # PDF添付したい場合（pdf_pathが存在する時だけ）
-    if pdf_path and os.path.exists(pdf_path):
-        with open(pdf_path, "rb") as f:
-            data = f.read()
-        msg.add_attachment(data, maintype="application", subtype="pdf", filename=os.path.basename(pdf_path))
 
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode("utf-8")
     service.users().messages().send(userId="me", body={"raw": raw}).execute()
-
-
-
-
