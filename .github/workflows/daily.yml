@@ -29,4 +29,4 @@ jobs:
           RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
           SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
           GMAIL_TOKEN: ${{ secrets.GMAIL_TOKEN }}
-        run: python main.py --test-email
+        run: python main.py
