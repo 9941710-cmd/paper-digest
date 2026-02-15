@@ -7,3 +7,5 @@ jinja2
 beautifulsoup4
 lxml
 reportlab
+sendgrid>=6.11.0
+
