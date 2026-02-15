@@ -8,4 +8,8 @@ beautifulsoup4
 lxml
 reportlab
 sendgrid>=6.11.0
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
+
 
