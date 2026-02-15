@@ -1,45 +1,45 @@
-import os
-import base64
 import json
-from typing import List, Dict, Optional
-from email.message import EmailMessage
-
+import os
+from typing import Optional
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
-from googleapiclient.discovery import build
+from google_auth_oauthlib.flow import InstalledAppFlow
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 
-
 def _get_credentials() -> Credentials:
-    # token.json / credentials.json は main.py と同じ場所（academic直下）に置く想定
-    token_path = os.path.join(os.getcwd(), "token.json")
-    cred_path = os.path.join(os.getcwd(), "credentials.json")
-
     creds: Optional[Credentials] = None
 
-     if "GMAIL_TOKEN" in os.environ:
+    # ① GitHub（Secret経由）
+    if os.getenv("GMAIL_TOKEN"):
         creds = Credentials.from_authorized_user_info(
-            json.loads(os.environ["GMAIL_TOKEN"]),
+            json.loads(os.getenv("GMAIL_TOKEN")),
             SCOPES
         )
-    elif os.path.exists(token_path):
-        creds = Credentials.from_authorized_user_file(token_path, SCOPES)
 
+    # ② ローカル token.json
+    elif os.path.exists("token.json"):
+        creds = Credentials.from_authorized_user_file(
+            "token.json",
+            SCOPES
+        )
+
+    # ③ 初回ローカル認証
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            if not os.path.exists(cred_path):
-                raise RuntimeError("credentials.json が見つかりません（academic直下に置いてください）")
-            flow = InstalledAppFlow.from_client_secrets_file(cred_path, SCOPES)
+            flow = InstalledAppFlow.from_client_secrets_file(
+                "credentials.json",
+                SCOPES
+            )
             creds = flow.run_local_server(port=0)
 
-        with open(token_path, "w", encoding="utf-8") as f:
-            f.write(creds.to_json())
+            with open("token.json", "w", encoding="utf-8") as f:
+                f.write(creds.to_json())
 
     return creds
+
 
 
 def _build_subject() -> str:
@@ -80,3 +80,4 @@ def send_email(papers: List[Dict], pdf_path: Optional[str] = None) -> None:
 
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode("utf-8")
     service.users().messages().send(userId="me", body={"raw": raw}).execute()
+
