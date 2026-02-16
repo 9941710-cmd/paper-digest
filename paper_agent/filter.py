@@ -37,20 +37,22 @@ def filter_process_metasurface_must(papers: List[Dict]) -> List[Dict]:
     for p in papers:
         t = _text(p)
 
-        # MUST metasurface
+        # metasurface MUST
         if not any(k in t for k in META_MUST):
             continue
 
-        # MUST process-ish
-        if not any(k in t for k in PROCESS_STRONG):
+        # process keyword at least 2 hits
+        process_hits = sum(1 for k in PROCESS_STRONG if k in t)
+        if process_hits < 2:
             continue
 
-        # Exclude comms metasurface/RIS
+        # exclude comms metasurface
         if any(k in t for k in EXCLUDE):
             continue
 
         out.append(p)
     return out
+
 
 
 def _score(p: Dict) -> int:
@@ -74,3 +76,4 @@ def _score(p: Dict) -> int:
 
 def pick_top_n(papers: List[Dict], n: int = 5) -> List[Dict]:
     return sorted(papers, key=_score, reverse=True)[:n]
+
