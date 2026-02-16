@@ -4,7 +4,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 from paper_agent.search import collect_candidates
-from paper_agent.filtering import filter_process_metasurface_must, pick_top_n
+from paper_agent.filter import filter_process_metasurface_must, pick_top_n
 from paper_agent.summarize import enrich_with_summaries
 from paper_agent.email_sender import send_digest_email
 from paper_agent.history import filter_new, update_history
@@ -93,3 +93,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
