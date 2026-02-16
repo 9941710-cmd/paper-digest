@@ -1,75 +1,76 @@
-import logging
-from . import config
+import re
+from typing import Dict, List
 
-logger = logging.getLogger(__name__)
+META_MUST = [
+    "metasurface", "metasurfaces", "meta-surface", "meta surface"
+]
 
-def calculate_score(paper):
-    """
-    Calculate a relevance score based on keyword matches in title and abstract.
-    """
+# Strong process terms (must hit at least one)
+PROCESS_STRONG = [
+    "atomic layer deposition", "ald", "peald", "plasma-enhanced ald",
+    "atomic layer etching", "ale",
+    "neutral loop discharge", "nld", "nld-rie",
+    "reactive ion etching", "rie", "plasma etching",
+    "nanofabrication", "lithography", "nanoimprint", "nil",
+    "thin film", "deposition", "etching", "patterning",
+    "tio2", "titania", "titanium dioxide",
+]
+
+# Exclude comms/RIS metasurface papers
+EXCLUDE = [
+    "reconfigurable intelligent surface", "wireless", "mimo", "5g", "6g",
+    "beamforming", "channel", "communication", "antenna", "routing", "network",
+    "multi-ris", "ris activation"
+]
+
+
+def _norm(s: str) -> str:
+    return re.sub(r"\s+", " ", (s or "").strip())
+
+
+def _text(p: Dict) -> str:
+    return (_norm(p.get("title","")) + " " + _norm(p.get("abstract",""))).lower()
+
+
+def filter_process_metasurface_must(papers: List[Dict]) -> List[Dict]:
+    out = []
+    for p in papers:
+        t = _text(p)
+
+        # MUST metasurface
+        if not any(k in t for k in META_MUST):
+            continue
+
+        # MUST process-ish
+        if not any(k in t for k in PROCESS_STRONG):
+            continue
+
+        # Exclude comms metasurface/RIS
+        if any(k in t for k in EXCLUDE):
+            continue
+
+        out.append(p)
+    return out
+
+
+def _score(p: Dict) -> int:
+    t = _text(p)
     score = 0
-    text = (paper['title'] + " " + paper['abstract']).lower()
-    
-    # High priority keywords (give more weight)
-    # ALD/TiO2
-    for k in config.KEYWORDS_ALD:
-        if k.lower() in text:
+    # prefer ALD/NLD/etch
+    for w in ["ald", "atomic layer deposition", "nld", "neutral loop discharge", "rie", "etch", "deposition", "tio2"]:
+        if w in t:
             score += 2
-            
-    # RIE
-    for k in config.KEYWORDS_RIE:
-        if k.lower() in text:
-            score += 2
-            
-    # Metasurface
-    for k in config.KEYWORDS_METASURFACE:
-        if k.lower() in text:
-            score += 2
-            
-    # Specific microstructure process
-    if "process" in text and "fabrication" in text:
+    # prefer TiO2 specifically
+    if "tio2" in t or "titania" in t:
+        score += 3
+    # bonus: has DOI / publisher link
+    if p.get("doi"):
+        score += 2
+    # bonus: abstract present (better summarization)
+    if p.get("abstract"):
         score += 1
-        
     return score
 
-def filter_papers(papers, top_n=5):
-    """
-    Filter papers, remove duplicates, score them, and return top N.
-    """
-    # Remove duplicates by DOI or Title
-    seen_dois = set()
-    unique_papers = []
-    
-    for paper in papers:
-        doi = paper.get('doi')
-        title = paper.get('title')
-        
-        if doi and doi != "N/A":
-            if doi in seen_dois:
-                continue
-            seen_dois.add(doi)
-        elif title:
-            # Fallback to title check if DOI missing
-            if title in seen_dois:
-                continue
-            seen_dois.add(title)
-            
-        unique_papers.append(paper)
-        
-    # Score papers
-    scored_papers = []
-    for paper in unique_papers:
-        score = calculate_score(paper)
-        # Filter out low relevance if needed, e.g. score > 0
-        if score > 0:
-            paper['score'] = score
-            scored_papers.append(paper)
-            
-    # Sort by score desc, then date desc
-    # (Assuming date format allows sorting, otherwise relying on score)
-    scored_papers.sort(key=lambda x: x['score'], reverse=True)
-    
-    top_papers = scored_papers[:top_n]
-    logger.info(f"Selected top {len(top_papers)} papers from {len(sys_papers if 'sys_papers' in locals() else papers)} candidates.")
-    
-    return top_papers
+
+def pick_top_n(papers: List[Dict], n: int = 5) -> List[Dict]:
+    return sorted(papers, key=_score, reverse=True)[:n]
