@@ -2,13 +2,12 @@ name: Daily Paper Digest
 
 on:
   schedule:
-    - cron: "0 0 * * *"   # 09:00 JST
+    - cron: "0 0 * * *"   # 09:00 JST (UTC 00:00)
   workflow_dispatch:
 
 jobs:
   run-agent:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -16,7 +15,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install dependencies
         run: pip install -r requirements.txt
@@ -26,4 +25,5 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GMAIL_TOKEN: ${{ secrets.GMAIL_TOKEN }}
           RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
-        run: python main.py
+          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+        run: python main.py --now
