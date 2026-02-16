@@ -13,7 +13,8 @@ PROCESS_STRONG = [
     "reactive ion etching", "rie", "plasma etching",
     "nanofabrication", "lithography", "nanoimprint", "nil",
     "thin film", "deposition", "etching", "patterning",
-    "tio2", "titania", "titanium dioxide",
+    "tio2", "titania", "titanium dioxide", "fabrication", "manufacturing", "structural", "resonator", "nanostructure"
+
 ]
 
 # Exclude comms/RIS metasurface papers
@@ -41,17 +42,17 @@ def filter_process_metasurface_must(papers: List[Dict]) -> List[Dict]:
         if not any(k in t for k in META_MUST):
             continue
 
-        # process keyword at least 2 hits
-        process_hits = sum(1 for k in PROCESS_STRONG if k in t)
-        if process_hits < 2:
+        # process keyword at least 1 hit (緩和版)
+        if not any(k in t for k in PROCESS_STRONG):
             continue
 
-        # exclude comms metasurface
+        # exclude obvious communication RIS
         if any(k in t for k in EXCLUDE):
             continue
 
         out.append(p)
     return out
+
 
 
 
@@ -76,4 +77,5 @@ def _score(p: Dict) -> int:
 
 def pick_top_n(papers: List[Dict], n: int = 5) -> List[Dict]:
     return sorted(papers, key=_score, reverse=True)[:n]
+
 
