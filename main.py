@@ -57,7 +57,7 @@ def job(days_back: int, n: int):
 def main():
     parser = argparse.ArgumentParser(description="Daily Paper Digest (metasurface MUST, process-focused)")
     parser.add_argument("--now", action="store_true", help="Run immediately and exit")
-    parser.add_argument("--days-back", type=int, default=21, help="Lookback window in days")
+    parser.add_argument("--days-back", type=int, default=365, help="Lookback window in days")
     parser.add_argument("--n", type=int, default=5, help="Number of papers to send")
     parser.add_argument("--test-email", action="store_true", help="Send a test email (no external search)")
     args = parser.parse_args()
@@ -89,4 +89,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
