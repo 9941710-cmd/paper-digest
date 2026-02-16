@@ -2,7 +2,7 @@ name: Daily Paper Digest
 
 on:
   schedule:
-    - cron: "0 0 * * *"  # 09:00 JST
+    - cron: "0 0 * * *"   # 09:00 JST
   workflow_dispatch:
 
 jobs:
@@ -24,9 +24,5 @@ jobs:
       - name: Run agent
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          EMAIL_ADDRESS: ${{ secrets.EMAIL_ADDRESS }}
-          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
-          RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
-          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
           GMAIL_TOKEN: ${{ secrets.GMAIL_TOKEN }}
         run: python main.py
