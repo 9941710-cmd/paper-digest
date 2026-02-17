@@ -1,32 +1,28 @@
 name: Daily Paper Digest
 
 on:
-  push:
-    branches: [ "main" ]
   schedule:
-    - cron: "* * * * *"
+    - cron: "*/5 * * * *"   # 5分ごと実行（GitHub遅延対策）
   workflow_dispatch:
-
-
-
-permissions:
-  contents: write
+  push:
 
 jobs:
   run-agent:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          persist-credentials: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install deps
+      - name: Install dependencies
         run: pip install -r requirements.txt
 
       - name: Run agent
@@ -35,12 +31,12 @@ jobs:
           GMAIL_TOKEN: ${{ secrets.GMAIL_TOKEN }}
           RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
           SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
-        run: python main.py --now
+        run: python main.py
 
       - name: Commit sent history
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add sent_db.json || true
+          git add sent_db.json || echo "No file"
           git commit -m "Update sent history" || echo "No changes"
           git push
