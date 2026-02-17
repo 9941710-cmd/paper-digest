@@ -9,7 +9,7 @@ import os
 import re
 import sys
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from typing import Dict, List, Optional, Tuple
@@ -35,14 +35,40 @@ except Exception:
 # Config
 # =========================
 JST = timezone(timedelta(hours=9))
-
 ARXIV_BASE = "http://export.arxiv.org/api/query"
 
+# ✅ 検索カテゴリを拡張（メタサーフェス母集団を増やす）
 DEFAULT_CATEGORIES = [
-    "cond-mat.mtrl-sci",
+    "physics.optics",        # metasurface本命
     "physics.app-ph",
+    "cond-mat.mtrl-sci",
+    "cond-mat.mes-hall",
     "cond-mat.other",
     "physics.ins-det",
+    "eess.SP",               # 光/電波デバイス寄り metasurface が混ざる
+]
+
+# ✅ 広めに拾う OR キーワード（arXivの検索段階で“ゆるく”母集団を作る）
+BROAD_TERMS = [
+    # metasurface
+    "metasurface", "metasurfaces", "metalens", "meta surface", "meta-surface",
+    # process
+    "atomic layer deposition", "ALD", "PEALD", "ALE",
+    "etching", "RIE", "plasma etching", "plasma",
+    "nanoimprint", "NIL", "lithography", "nanofabrication", "patterning",
+    "thin film", "deposition", "fabrication",
+    # materials
+    "TiO2", "titania", "titanium dioxide",
+]
+
+# ✅ 通信/RIS/ネットワーク寄りのノイズ除外
+EXCLUDE_KEYWORDS = [
+    "ris", "reconfigurable intelligent surface",
+    "beamforming", "mimo", "channel", "wireless",
+    "6g", "5g", "mmwave", "mm-wave", "terahertz communication", "thz communication",
+    "network", "multi-user", "base station", "ue", "bs",
+    "trajectory", "localization", "positioning",
+    "rate", "throughput", "spectral efficiency",
 ]
 
 # 「プロセス寄り」の強いキーワード（タイトル/要旨にあると加点）
@@ -61,7 +87,7 @@ PROCESS_KEYWORDS_STRONG = [
 # メタサーフェス判定（最低1本は必ず入れたい）
 METASURFACE_KEYWORDS = [
     "metasurface", "metasurfaces", "meta-surface", "meta surface",
-    "metalens", "meta-lens", "metagrating", "metagrating",
+    "metalens", "meta-lens", "metagrating",
 ]
 
 # 「プロセス寄り」をさらに強化する語（あると追加加点）
@@ -138,13 +164,13 @@ def env_get(name: str, default: Optional[str] = None) -> Optional[str]:
 def build_arxiv_query(
     categories: List[str],
     must_terms: Optional[List[str]] = None,
-    max_results: int = 200,
+    max_results: int = 500,
 ) -> str:
     cat_q = " OR ".join([f"cat:{c}" for c in categories])
     q = f"({cat_q})"
 
     if must_terms:
-        # all:term OR all:"multi word"
+        # ORで広く拾う（all:term OR all:"multi word"）
         parts = []
         for t in must_terms:
             t = t.strip()
@@ -178,11 +204,9 @@ def parse_arxiv_atom(xml_text: str) -> List[Paper]:
         published = normalize_text(entry.findtext("atom:published", default="", namespaces=ns))
         updated = normalize_text(entry.findtext("atom:updated", default="", namespaces=ns))
 
-        # id like: http://arxiv.org/abs/xxxx.xxxxxv1
         _id = normalize_text(entry.findtext("atom:id", default="", namespaces=ns))
         arxiv_id = _id.rsplit("/", 1)[-1] if _id else ""
 
-        # link rel="alternate"
         link = ""
         for l in entry.findall("atom:link", ns):
             if l.attrib.get("rel") == "alternate":
@@ -221,7 +245,7 @@ def parse_arxiv_atom(xml_text: str) -> List[Paper]:
 def fetch_arxiv(
     categories: List[str],
     must_terms: Optional[List[str]],
-    max_results: int = 200,
+    max_results: int = 500,
     timeout: int = 30,
 ) -> List[Paper]:
     url = build_arxiv_query(categories, must_terms=must_terms, max_results=max_results)
@@ -235,7 +259,6 @@ def fetch_arxiv(
 # Filtering / scoring
 # =========================
 def within_days_back(iso_ts: str, days_back: int) -> bool:
-    # iso_ts like "2026-02-16T01:29:12Z"
     try:
         dt = datetime.fromisoformat(iso_ts.replace("Z", "+00:00"))
     except Exception:
@@ -252,25 +275,28 @@ def keyword_hits(text: str, keywords: List[str]) -> List[str]:
     return hits
 
 
+def should_exclude(p: Paper) -> bool:
+    t = f"{p.title} {p.summary}".lower()
+    return any(k in t for k in EXCLUDE_KEYWORDS)
+
+
 def score_paper(p: Paper) -> Paper:
     text = f"{p.title} {p.summary}"
     hits_strong = keyword_hits(text, PROCESS_KEYWORDS_STRONG)
     hits_extra = keyword_hits(text, PROCESS_KEYWORDS_EXTRA)
     hits_meta = keyword_hits(text, METASURFACE_KEYWORDS)
 
-    # base score: strong hits + extra hits
     score = 0.0
     score += 3.0 * len(hits_strong)
     score += 1.5 * len(hits_extra)
 
-    # bonus: if it clearly mentions ALD/NLD-RIE/ALE/NIL/etc in title
     title_l = p.title.lower()
-    if any(k in title_l for k in ["ald", "atomic layer deposition", "peald", "nld", "nld-rie", "ale", "nanoimprint", "nil", "metasurface"]):
+    if any(k in title_l for k in ["ald", "atomic layer deposition", "peald", "nld", "nld-rie", "ale", "nanoimprint", "nil", "metasurface", "metalens"]):
         score += 8.0
 
     is_meta = len(hits_meta) > 0
     if is_meta:
-        score += 10.0  # metasurface priority (you asked MUST-ish)
+        score += 10.0  # metasurface優先
 
     # processy definition
     is_processy = (len(hits_strong) >= 2) or any(
@@ -325,13 +351,13 @@ def pick_top_n(
     n: int,
     metasurface_at_least_one: bool = True,
 ) -> List[Paper]:
-    # sort by score desc
     candidates = sorted(candidates, key=lambda x: x.score, reverse=True)
     if not candidates:
         return []
 
     selected: List[Paper] = []
 
+    # できれば1本はメタサーフェスを確保
     if metasurface_at_least_one:
         meta = [p for p in candidates if p.is_metasurface]
         if meta:
@@ -344,7 +370,6 @@ def pick_top_n(
             continue
         selected.append(p)
 
-    # If we still didn't fill, just return what we have
     return selected[:n]
 
 
@@ -361,8 +386,8 @@ def openai_client() -> "OpenAI":
 
 
 def summarize_with_openai(p: Paper, model: str = "gpt-4o-mini") -> str:
-    # 5–10 lines, process-focused, Japanese
     client = openai_client()
+
     prompt = f"""
 あなたは半導体プロセス/ナノ加工の研究者向けに論文を要約するアシスタントです。
 以下の論文のタイトルと要旨から、5〜10行で日本語要約してください。
@@ -376,7 +401,6 @@ def summarize_with_openai(p: Paper, model: str = "gpt-4o-mini") -> str:
 {p.summary}
 """.strip()
 
-    # retry a bit
     for attempt in range(4):
         try:
             resp = client.chat.completions.create(
@@ -387,11 +411,9 @@ def summarize_with_openai(p: Paper, model: str = "gpt-4o-mini") -> str:
                 ],
                 temperature=0.2,
             )
-            txt = resp.choices[0].message.content or ""
-            txt = txt.strip()
+            txt = (resp.choices[0].message.content or "").strip()
             return txt
         except Exception as e:
-            # backoff
             wait = 0.7 * (2 ** attempt)
             print(f"[WARN] OpenAI error: {e} (retry in {wait:.1f}s)")
             time.sleep(wait)
@@ -410,12 +432,10 @@ def get_gmail_service():
     if not token:
         raise RuntimeError("GMAIL_TOKEN is missing (GitHub Secrets に入れてください)")
 
-    # token can be JSON or base64(JSON)
     token = token.strip()
     if token.startswith("{"):
         token_info = safe_json_loads(token)
     else:
-        # try base64
         try:
             decoded = base64.b64decode(token).decode("utf-8", errors="ignore").strip()
             token_info = safe_json_loads(decoded)
@@ -440,9 +460,10 @@ def build_email_text(papers: List[Paper], header: str) -> str:
             lines.append(f"Published: {p.published}")
         if p.authors:
             lines.append("Authors: " + ", ".join(p.authors[:8]) + (" ..." if len(p.authors) > 8 else ""))
+        if p.keywords_hit:
+            lines.append("Hits: " + ", ".join(p.keywords_hit[:15]) + (" ..." if len(p.keywords_hit) > 15 else ""))
         if p.digest:
             lines.append("")
-            # ensure 5-10 lines max-ish; keep as-is from model
             lines.append(p.digest.strip())
         else:
             lines.append("")
@@ -478,20 +499,23 @@ def send_gmail(subject: str, body_text: str) -> None:
 def job(
     days_back: int,
     n: int,
-    metasurface_must: bool,
+    metasurface_must: bool,   # Trueなら“なるべく”確保（0ならフォールバック）
     process_strict: bool,
-    max_results: int = 200,
+    max_results: int = 500,   # ✅ 増やした
 ) -> Tuple[List[Paper], List[Paper]]:
     sent_db = load_sent_db("sent_db.json")
 
-    # broad arXiv pull: categories only
-    raw = fetch_arxiv(DEFAULT_CATEGORIES, must_terms=None, max_results=max_results)
+    # ✅ 広めキーワードで母集団を増やす（ORで拾う）
+    raw = fetch_arxiv(DEFAULT_CATEGORIES, must_terms=BROAD_TERMS, max_results=max_results)
 
     # filter by date
     raw = [p for p in raw if within_days_back(p.updated or p.published, days_back)]
-    print(f"[INFO] Fetched {len(raw)} papers within days_back={days_back}")
 
-    # score & remove already sent
+    # ✅ ノイズ除外
+    raw = [p for p in raw if not should_exclude(p)]
+
+    print(f"[INFO] Fetched {len(raw)} papers within days_back={days_back} (after exclude)")
+
     scored: List[Paper] = []
     for p in raw:
         score_paper(p)
@@ -510,42 +534,49 @@ def job(
 
     print(f"[INFO] Filtered candidates: {len(filtered)} (process_strict={process_strict})")
 
-    # metasurface MUST logic:
-    # - If metasurface_must=True, we still allow fallback if nothing exists.
+    # metasurface logic: MUST指定でも0件ならフォールバック（“0件地獄”を避ける）
     if metasurface_must:
         meta_only = [p for p in filtered if p.is_metasurface]
         if not meta_only:
-            print("[WARN] metasurface must requested, but none found. Falling back to best process papers.")
+            print("[WARN] metasurface requested, but none found. Falling back to best process papers.")
             metasurface_at_least_one = False
             pool = filtered
         else:
             metasurface_at_least_one = True
             pool = filtered
     else:
-        metasurface_at_least_one = True  # you said "マストで入れてほしい"が基本方針
+        # 既定：最低1本はメタサーフェス（可能な範囲で）
+        metasurface_at_least_one = True
         pool = filtered
 
     selected = pick_top_n(pool, n=n, metasurface_at_least_one=metasurface_at_least_one)
     print(f"[INFO] Selected {len(selected)} papers")
 
-    # If still empty, send notice email (optional)
     if not selected:
         subject = f"Paper Digest（候補なし） {now_jst().strftime('%Y-%m-%d')}"
-        body = "条件に合う新着が見つかりませんでした。\n\n・days_backを増やす\n・process_strictをFalseにする\nなどで緩和できます。\n"
+        body = (
+            "条件に合う新着が見つかりませんでした。\n\n"
+            "緩和案:\n"
+            "・--process-strict を外す\n"
+            "・--days-back を増やす（今は1年以内）\n"
+            "・EXCLUDE_KEYWORDS を減らす\n"
+        )
         send_gmail(subject, body)
         return [], []
 
     # Summarize
+    model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
     for i, p in enumerate(selected, 1):
         print(f"[INFO] Summarizing {i}/{len(selected)}: {p.title[:80]}")
-        p.digest = summarize_with_openai(p)
+        p.digest = summarize_with_openai(p, model=model)
 
     # Send
     subject = f"Paper Digest {now_jst().strftime('%Y-%m-%d')}（{len(selected)}本）"
     header = (
         "本日の論文ダイジェストです（5–10行要約）。\n"
-        f"条件: days_back={days_back}, process_strict={process_strict}, metasurface_must={metasurface_must}\n"
+        f"条件: days_back={days_back}, process_strict={process_strict}, metasurface_pref={not metasurface_must or metasurface_must}\n"
         f"生成時刻(JST): {now_jst().strftime('%Y-%m-%d %H:%M')}\n"
+        "※ 通信/RIS系は除外しています。\n"
     )
     body = build_email_text(selected, header)
     send_gmail(subject, body)
@@ -572,12 +603,16 @@ def main():
     parser.add_argument("--test-email", action="store_true", help="Send a simple test email and exit")
     parser.add_argument("--days-back", type=int, default=365, help="Look back N days (default: 365)")
     parser.add_argument("--n", type=int, default=5, help="Number of papers to send (default: 5)")
-    parser.add_argument("--metasurface-must", action="store_true", help="Try to enforce metasurface presence (fallback if none)")
+    parser.add_argument(
+        "--metasurface-must",
+        action="store_true",
+        help="Try to enforce metasurface presence (fallback if none)",
+    )
     parser.add_argument("--process-strict", action="store_true", help="Stricter process-only filtering")
+    parser.add_argument("--max-results", type=int, default=500, help="arXiv max_results (default: 500)")
     parser.add_argument("--model", type=str, default=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"), help="OpenAI model")
     args = parser.parse_args()
 
-    # Allow overriding model via env/arg
     if args.model:
         os.environ["OPENAI_MODEL"] = args.model
 
@@ -592,17 +627,16 @@ def main():
             print("[INFO] Not in JST 09:00-09:04 window. Skipping.")
             return
 
-    # Run
     try:
         selected, _filtered = job(
             days_back=args.days_back,
             n=args.n,
             metasurface_must=args.metasurface_must,
             process_strict=args.process_strict,
+            max_results=args.max_results,
         )
         print(f"[INFO] Done. sent={len(selected)}")
     except Exception as e:
-        # If something fails, try to notify by email (best effort)
         print(f"[ERROR] {e}")
         try:
             subject = f"Paper Digest ERROR {now_jst().strftime('%Y-%m-%d %H:%M')}"
