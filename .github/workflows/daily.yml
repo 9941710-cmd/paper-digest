@@ -2,8 +2,9 @@ name: Daily Paper Digest
 
 on:
   schedule:
-    - cron: "0 0 * * *"   # 09:00 JST (UTC 00:00)
+    - cron: "*/10 * * * *"  # 10分おき（検証用）
   workflow_dispatch:
+
 
 jobs:
   run-agent:
