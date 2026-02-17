@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 JST = timezone(timedelta(hours=9))
 
-DEFAULT_DAYS_BACK = 365   # ★ 1年以内
+DEFAULT_DAYS_BACK = 1800   # ★ 5年以内
 
 
 def job(days_back: int, n: int):
@@ -93,4 +93,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
