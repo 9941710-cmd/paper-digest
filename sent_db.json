@@ -209,6 +209,36 @@
       "link": "https://arxiv.org/abs/2602.08627v1",
       "published": "2026-02-09T13:16:28Z",
       "sent_at": "2026-02-19T05:01:11.183911+09:00"
+    },
+    "2602.07328v1": {
+      "title": "High-Throughput In-Situ Fabrication of Fibrous Membranes Enables Scalable Passive Radiative Cooling",
+      "link": "https://arxiv.org/abs/2602.07328v1",
+      "published": "2026-02-07T03:01:04Z",
+      "sent_at": "2026-02-19T08:04:50.975844+09:00"
+    },
+    "2602.07236v1": {
+      "title": "Impact of crystallinity on the circular and linear dichroism signals in chiral perovskite",
+      "link": "https://arxiv.org/abs/2602.07236v1",
+      "published": "2026-02-06T22:31:01Z",
+      "sent_at": "2026-02-19T08:04:50.975844+09:00"
+    },
+    "2602.06757v1": {
+      "title": "Damage accumulation induced metal-insulator transition through ion implantation of ScN thin films",
+      "link": "https://arxiv.org/abs/2602.06757v1",
+      "published": "2026-02-06T15:05:02Z",
+      "sent_at": "2026-02-19T08:04:50.975844+09:00"
+    },
+    "2602.05481v1": {
+      "title": "Crystallinity Evolution of MOCVD-Grown $β$-Ga$_2$O$_3$ Films Probed by In Situ HT-XRD under Different Reactor Heights",
+      "link": "https://arxiv.org/abs/2602.05481v1",
+      "published": "2026-02-05T09:40:50Z",
+      "sent_at": "2026-02-19T08:04:50.975844+09:00"
+    },
+    "2602.04619v1": {
+      "title": "Scalable platform enabling reservoir computing with nanoporous oxide memristors for image recognition and time series prediction",
+      "link": "https://arxiv.org/abs/2602.04619v1",
+      "published": "2026-02-04T14:46:52Z",
+      "sent_at": "2026-02-19T08:04:50.975844+09:00"
     }
   }
 }
