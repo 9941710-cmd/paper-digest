@@ -1,12 +1,34 @@
-[
-  "doi:https://doi.org/10.3390/photonics10040401",
-  "title:all-dielectric structural coloration empowered by bound states in the continuum",
-  "title:design of rectangular waveguide-fed metasurfaces for near-field shaping using a coupled dipole model",
-  "title:direct photochemical patterning of lithium niobate thin films for scalable nonlinear optical metasurfaces",
-  "title:do bilayer metasurfaces behave as a stack of decoupled single-layer metasurfaces?",
-  "title:emergence of pascal's triangle in cascaded polarization optics: an intuitive framework for field transformation",
-  "title:free-standing bilayer metasurfaces in the visible",
-  "title:manipulate intrinsic light-matter interaction with bound state in the continuum in van der waals metasurfaces by artificial etching",
-  "title:multilayer q-bic-like optical filters with high throughput direct-write multilayer lithography",
-  "title:vo2 films grown on tio2 sub-layer: influence of thickness on structural, electrical and optical properties"
-]
+{
+  "sent": {
+    "2602.00830v2": {
+      "title": "Efficient and tunable narrowband second-harmonic generation by a large-area etchless lithium niobate metasurface",
+      "link": "https://arxiv.org/abs/2602.00830v2",
+      "published": "2026-01-31T17:51:04Z",
+      "sent_at": "2026-02-18T10:01:07.631958+09:00"
+    },
+    "2602.08823v1": {
+      "title": "Perfect all-angle asymmetric transmission via normal susceptibilities: exact spatial derivative by local meta-atoms and nonlocal metasurfaces",
+      "link": "https://arxiv.org/abs/2602.08823v1",
+      "published": "2026-02-09T15:57:12Z",
+      "sent_at": "2026-02-18T10:01:07.631958+09:00"
+    },
+    "2602.08406v1": {
+      "title": "Optimizing Spectral Prediction in MXene-Based Metasurfaces Through Multi-Channel Spectral Refinement and Savitzky-Golay Smoothing",
+      "link": "https://arxiv.org/abs/2602.08406v1",
+      "published": "2026-02-09T09:09:32Z",
+      "sent_at": "2026-02-18T10:01:07.631958+09:00"
+    },
+    "2602.08193v1": {
+      "title": "Amplified up-conversion of electromagnetic waves using time-varying metasurfaces",
+      "link": "https://arxiv.org/abs/2602.08193v1",
+      "published": "2026-02-09T01:24:24Z",
+      "sent_at": "2026-02-18T10:01:07.631958+09:00"
+    },
+    "2602.01653v1": {
+      "title": "Low-Complexity Multi-Agent Continual Learning for Stacked Intelligent Metasurface-Assisted Secure Communications",
+      "link": "https://arxiv.org/abs/2602.01653v1",
+      "published": "2026-02-02T05:12:57Z",
+      "sent_at": "2026-02-18T10:01:07.631958+09:00"
+    }
+  }
+}
