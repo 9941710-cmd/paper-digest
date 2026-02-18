@@ -29,6 +29,36 @@
       "link": "https://arxiv.org/abs/2602.01653v1",
       "published": "2026-02-02T05:12:57Z",
       "sent_at": "2026-02-18T10:01:07.631958+09:00"
+    },
+    "2602.07937v1": {
+      "title": "Trajectory-Aware Multi-RIS Activation and Configuration: A Riemannian Diffusion Method",
+      "link": "https://arxiv.org/abs/2602.07937v1",
+      "published": "2026-02-08T12:09:19Z",
+      "sent_at": "2026-02-18T14:18:15.429730+09:00"
+    },
+    "2602.15209v1": {
+      "title": "Secure High-Resolution ISAC via Multi-Layer Intelligent Metasurfaces: A Layered Optimization Framework",
+      "link": "https://arxiv.org/abs/2602.15209v1",
+      "published": "2026-02-16T21:39:44Z",
+      "sent_at": "2026-02-18T14:18:15.429730+09:00"
+    },
+    "2602.04627v1": {
+      "title": "Dicke Superradiance in Extended 2D Quantum Arrays Coupled to Metasurface Bound States in the Continuum",
+      "link": "https://arxiv.org/abs/2602.04627v1",
+      "published": "2026-02-04T14:57:58Z",
+      "sent_at": "2026-02-18T14:18:15.429730+09:00"
+    },
+    "2602.12040v1": {
+      "title": "Exploiting Structural Flexibility in SIM-Enabled Communications: From Adaptive Inter-Layer Spacing to Fully Morphable Layers",
+      "link": "https://arxiv.org/abs/2602.12040v1",
+      "published": "2026-02-12T15:06:22Z",
+      "sent_at": "2026-02-18T14:18:15.429730+09:00"
+    },
+    "2602.14152v1": {
+      "title": "Electromagnetic Bounds on Realizing Targeted MIMO Transfer Functions in Real-World Systems with Wave-Domain Programmability",
+      "link": "https://arxiv.org/abs/2602.14152v1",
+      "published": "2026-02-15T13:57:33Z",
+      "sent_at": "2026-02-18T14:18:15.429730+09:00"
     }
   }
 }
