@@ -479,6 +479,36 @@
       "link": "https://arxiv.org/abs/2602.09526v1",
       "published": "2026-02-10T08:30:20Z",
       "sent_at": "2026-02-20T08:47:29.908602+09:00"
+    },
+    "2602.16956v1": {
+      "title": "The Multi-Scale Dynamics of All-Optical Exchange Bias Reversal",
+      "link": "https://arxiv.org/abs/2602.16956v1",
+      "published": "2026-02-18T23:42:02Z",
+      "sent_at": "2026-02-20T14:08:22.240528+09:00"
+    },
+    "2602.17135v1": {
+      "title": "Graphene FET Process and Analysis Optimization in 200 mm Pilot Line Environment",
+      "link": "https://arxiv.org/abs/2602.17135v1",
+      "published": "2026-02-19T07:14:59Z",
+      "sent_at": "2026-02-20T14:08:22.240528+09:00"
+    },
+    "2602.16886v1": {
+      "title": "Atomically Precise Electron Beam Sculpting of Bilayer h-BN: The Role of Crystallographic Orientation and Milling Strategy",
+      "link": "https://arxiv.org/abs/2602.16886v1",
+      "published": "2026-02-18T21:11:29Z",
+      "sent_at": "2026-02-20T14:08:22.240528+09:00"
+    },
+    "2602.17332v1": {
+      "title": "g4chargeit: Geant4-based kinetic Monte Carlo simulations of charging in dielectric materials",
+      "link": "https://arxiv.org/abs/2602.17332v1",
+      "published": "2026-02-19T12:58:00Z",
+      "sent_at": "2026-02-20T14:08:22.240528+09:00"
+    },
+    "2602.17225v1": {
+      "title": "Wide-Surface Furnace for In Situ X-Ray Diffraction of Combinatorial Samples using a High-Throughput Approach",
+      "link": "https://arxiv.org/abs/2602.17225v1",
+      "published": "2026-02-19T10:17:22Z",
+      "sent_at": "2026-02-20T14:08:22.240528+09:00"
     }
   }
 }
