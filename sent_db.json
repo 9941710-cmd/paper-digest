@@ -569,6 +569,36 @@
       "link": "https://arxiv.org/abs/2602.13282v2",
       "published": "2026-02-06T16:21:06Z",
       "sent_at": "2026-02-20T20:48:12.380253+09:00"
+    },
+    "2602.06344v1": {
+      "title": "Epitaxial growth and magneto-transport properties of kagome metal FeGe thin films",
+      "link": "https://arxiv.org/abs/2602.06344v1",
+      "published": "2026-02-06T03:21:44Z",
+      "sent_at": "2026-02-20T23:13:02.716380+09:00"
+    },
+    "2602.06173v1": {
+      "title": "Engineering altermagnetic symmetry to enable anomalous Hall response in Cr$_{1-x}$Mn$_x$Sb",
+      "link": "https://arxiv.org/abs/2602.06173v1",
+      "published": "2026-02-05T20:25:17Z",
+      "sent_at": "2026-02-20T23:13:02.716380+09:00"
+    },
+    "2602.05908v1": {
+      "title": "Self-Portrait of the Focusing Process in Speckle: III. Tailoring Complex Spatio-Temporal Focusing Laws To Overcome Reverberations in Reflection Imaging",
+      "link": "https://arxiv.org/abs/2602.05908v1",
+      "published": "2026-02-05T17:24:18Z",
+      "sent_at": "2026-02-20T23:13:02.716380+09:00"
+    },
+    "2602.05889v1": {
+      "title": "Low-temperature spin dynamics in LAFO thin films: from cubic anisotropy to TLS-limited coherence",
+      "link": "https://arxiv.org/abs/2602.05889v1",
+      "published": "2026-02-05T17:07:17Z",
+      "sent_at": "2026-02-20T23:13:02.716380+09:00"
+    },
+    "2602.04505v1": {
+      "title": "PhoQuPy: A Python framework for Automation of Quantum Optics experiments",
+      "link": "https://arxiv.org/abs/2602.04505v1",
+      "published": "2026-02-04T12:52:32Z",
+      "sent_at": "2026-02-20T23:13:02.716380+09:00"
     }
   }
 }
