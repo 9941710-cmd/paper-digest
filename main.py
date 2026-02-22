@@ -1,16 +1,12 @@
-# main.py
-# Stable daily paper digest (metasurface/process oriented)
-
 import argparse
 import base64
 import json
 import os
 import re
-import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
-from typing import Dict, List, Optional
+from typing import Dict, List
 from urllib.parse import quote_plus
 
 import requests
@@ -28,6 +24,7 @@ except Exception:
     build = None
 
 
+UTC = timezone.utc
 JST = timezone(timedelta(hours=9))
 ARXIV_BASE = "http://export.arxiv.org/api/query"
 
@@ -41,12 +38,21 @@ DEFAULT_CATEGORIES = [
     "eess.SY",
 ]
 
-UA = {"User-Agent": "paper-digest-stable/2.0"}
+UA = {"User-Agent": "paper-digest-stable/2.1"}
 
+KEYWORDS = [
+    "metasurface", "metalens",
+    "ALD", "atomic layer deposition",
+    "etching", "RIE", "nanoimprint",
+    "nanofabrication", "thin film",
+]
 
-# =====================
-# Data Model
-# =====================
+SCORE_WORDS = [
+    "ald", "atomic layer", "etch", "plasma",
+    "nanoimprint", "lithography",
+    "metasurface", "metalens",
+]
+
 
 @dataclass
 class Paper:
@@ -56,38 +62,46 @@ class Paper:
     arxiv_id: str
     published: str
     updated: str
-
     score: float = 0.0
     is_meta: bool = False
-
-
-# =====================
-# Utilities
-# =====================
-
-def now_jst():
-    return datetime.now(JST)
 
 
 def normalize_text(s: str) -> str:
     return re.sub(r"\s+", " ", (s or "").replace("\n", " ")).strip()
 
 
-# =====================
-# arXiv Fetch
-# =====================
+def parse_iso_to_utc_aware(s: str) -> datetime:
+    """
+    arXivの '2026-02-16T01:29:12Z' / '+00:00' / 末尾なし などを安全にUTC awareへ。
+    """
+    s = (s or "").strip()
+    if not s:
+        return datetime(1970, 1, 1, tzinfo=UTC)
 
-def build_query(max_results=500):
+    # Zを+00:00へ
+    s = s.replace("Z", "+00:00")
+
+    try:
+        dt = datetime.fromisoformat(s)
+    except Exception:
+        # フォールバック（日時だけなど）
+        try:
+            # YYYY-MM-DD だけなら 00:00 UTC
+            dt = datetime.fromisoformat(s.split("T")[0])
+        except Exception:
+            return datetime(1970, 1, 1, tzinfo=UTC)
+
+    # naiveならUTCとみなす
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+
+    # UTCへ
+    return dt.astimezone(UTC)
+
+
+def build_query(max_results=500) -> str:
     cat_q = " OR ".join([f"cat:{c}" for c in DEFAULT_CATEGORIES])
-    keywords = [
-        "metasurface", "metalens",
-        "ALD", "atomic layer deposition",
-        "etching", "RIE", "nanoimprint",
-        "nanofabrication", "thin film"
-    ]
-
-    key_q = " OR ".join([f'all:"{k}"' for k in keywords])
-
+    key_q = " OR ".join([f'all:"{k}"' for k in KEYWORDS])
     query = f"({cat_q}) AND ({key_q})"
 
     return (
@@ -97,87 +111,77 @@ def build_query(max_results=500):
     )
 
 
-def fetch_arxiv():
-    url = build_query()
+def fetch_arxiv(max_results=500) -> List[Paper]:
+    url = build_query(max_results=max_results)
     print("[INFO] Fetch:", url)
-    r = requests.get(url, headers=UA)
+    r = requests.get(url, headers=UA, timeout=30)
     r.raise_for_status()
 
     import xml.etree.ElementTree as ET
     ns = {"atom": "http://www.w3.org/2005/Atom"}
     root = ET.fromstring(r.text)
 
-    papers = []
+    papers: List[Paper] = []
     for entry in root.findall("atom:entry", ns):
         title = normalize_text(entry.findtext("atom:title", default="", namespaces=ns))
         summary = normalize_text(entry.findtext("atom:summary", default="", namespaces=ns))
         published = normalize_text(entry.findtext("atom:published", default="", namespaces=ns))
         updated = normalize_text(entry.findtext("atom:updated", default="", namespaces=ns))
         _id = normalize_text(entry.findtext("atom:id", default="", namespaces=ns))
-        arxiv_id = _id.rsplit("/", 1)[-1]
-        link = f"https://arxiv.org/abs/{arxiv_id}"
+        arxiv_id = _id.rsplit("/", 1)[-1] if _id else ""
+        link = f"https://arxiv.org/abs/{arxiv_id}" if arxiv_id else _id
 
         papers.append(Paper(title, summary, link, arxiv_id, published, updated))
 
     return papers
 
 
-# =====================
-# Filtering
-# =====================
-
-def score_paper(p: Paper):
+def score_paper(p: Paper) -> None:
     t = (p.title + " " + p.summary).lower()
-
     score = 0
-    keywords = [
-        "ald", "atomic layer", "etch", "plasma",
-        "nanoimprint", "lithography",
-        "metasurface", "metalens"
-    ]
-
-    for k in keywords:
-        if k in t:
+    for w in SCORE_WORDS:
+        if w in t:
             score += 5
-
     if "metasurface" in t or "metalens" in t:
         p.is_meta = True
         score += 10
-
-    p.score = score
-    return p
+    p.score = float(score)
 
 
-# =====================
-# sent_db handling (90日保持)
-# =====================
-
-def load_db():
+def load_db() -> Dict[str, Dict]:
     if not os.path.exists("sent_db.json"):
         return {}
-    return json.load(open("sent_db.json"))
+    try:
+        with open("sent_db.json", "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
 
-def save_db(db):
-    json.dump(db, open("sent_db.json", "w"), indent=2)
+def save_db(db: Dict[str, Dict]) -> None:
+    with open("sent_db.json", "w", encoding="utf-8") as f:
+        json.dump(db, f, ensure_ascii=False, indent=2)
 
 
-def clean_old_entries(db):
-    cutoff = datetime.utcnow() - timedelta(days=90)
+def clean_old_entries(db: Dict[str, Dict], keep_days: int = 90) -> Dict[str, Dict]:
+    cutoff = datetime.now(UTC) - timedelta(days=keep_days)
     new_db = {}
     for k, v in db.items():
-        ts = datetime.fromisoformat(v["sent_at"])
-        if ts > cutoff:
+        ts = v.get("sent_at", "")
+        dt = parse_iso_to_utc_aware(ts)
+        if dt > cutoff:
             new_db[k] = v
     return new_db
 
 
-# =====================
-# OpenAI Summarize
-# =====================
+def openai_summarize(p: Paper) -> str:
+    if OpenAI is None:
+        return "OpenAIライブラリが無いため要約できません。"
+    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        return "OPENAI_API_KEY が無いため要約できません。"
 
-def summarize(p: Paper):
-    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    client = OpenAI(api_key=api_key)
     prompt = f"""
 以下の論文を5〜10行、日本語でプロセス寄りに要約してください。
 
@@ -186,63 +190,85 @@ Title:
 
 Abstract:
 {p.summary}
-"""
+""".strip()
+
     resp = client.chat.completions.create(
         model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.2
+        temperature=0.2,
     )
+    return (resp.choices[0].message.content or "").strip()
 
-    return resp.choices[0].message.content.strip()
+
+def parse_gmail_token() -> Dict:
+    token = os.environ.get("GMAIL_TOKEN", "").strip()
+    if not token:
+        raise RuntimeError("GMAIL_TOKEN is missing")
+    if token.startswith("{"):
+        return json.loads(token)
+    # base64(JSON) fallback
+    decoded = base64.b64decode(token).decode("utf-8", errors="ignore").strip()
+    return json.loads(decoded)
 
 
-# =====================
-# Gmail Send
-# =====================
+def send_email(body: str, subject: str) -> None:
+    if Credentials is None or build is None:
+        raise RuntimeError("google api libs missing")
 
-def send_email(body, subject):
+    recipient = os.environ.get("RECIPIENT_EMAIL", "").strip()
+    sender = os.environ.get("SENDER_EMAIL", "").strip()
+    if not recipient:
+        raise RuntimeError("RECIPIENT_EMAIL is missing")
+    if not sender:
+        raise RuntimeError("SENDER_EMAIL is missing")
+
+    token_info = parse_gmail_token()
     creds = Credentials.from_authorized_user_info(
-        json.loads(os.environ["GMAIL_TOKEN"]),
+        token_info,
         scopes=["https://www.googleapis.com/auth/gmail.send"],
     )
     service = build("gmail", "v1", credentials=creds)
 
     msg = EmailMessage()
-    msg["To"] = os.environ["RECIPIENT_EMAIL"]
-    msg["From"] = os.environ["SENDER_EMAIL"]
+    msg["To"] = recipient
+    msg["From"] = sender
     msg["Subject"] = subject
     msg.set_content(body)
 
-    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode("utf-8")
     service.users().messages().send(userId="me", body={"raw": raw}).execute()
+    print("[INFO] Email sent.")
 
-
-# =====================
-# Main
-# =====================
 
 def main():
-    papers = fetch_arxiv()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--days-back", type=int, default=365)
+    parser.add_argument("--n", type=int, default=5)
+    parser.add_argument("--max-results", type=int, default=500)
+    args = parser.parse_args()
 
-    # 1年以内
-    cutoff = datetime.utcnow() - timedelta(days=365)
-    papers = [
-        p for p in papers
-        if datetime.fromisoformat(p.updated.replace("Z","+00:00")) > cutoff
-    ]
+    papers = fetch_arxiv(max_results=args.max_results)
 
-    db = load_db()
-    db = clean_old_entries(db)
+    cutoff = datetime.now(UTC) - timedelta(days=args.days_back)
 
-    filtered = []
+    # ✅ UTC awareで比較（ここが修正点）
+    filtered_by_date = []
     for p in papers:
+        upd = parse_iso_to_utc_aware(p.updated)
+        if upd > cutoff:
+            filtered_by_date.append(p)
+
+    db = clean_old_entries(load_db(), keep_days=90)
+
+    candidates = []
+    for p in filtered_by_date:
+        if p.arxiv_id and p.arxiv_id in db:
+            continue
         score_paper(p)
-        if p.arxiv_id not in db:
-            filtered.append(p)
+        candidates.append(p)
 
-    filtered.sort(key=lambda x: x.score, reverse=True)
-
-    selected = filtered[:5]
+    candidates.sort(key=lambda x: x.score, reverse=True)
+    selected = candidates[: args.n]
 
     if not selected:
         send_email("該当論文なし（条件緩和推奨）", "Paper Digest - No Matches")
@@ -250,23 +276,18 @@ def main():
 
     body_lines = []
     for p in selected:
-        summary = summarize(p)
+        summary = openai_summarize(p)
         body_lines.append(f"==== {p.title}")
         body_lines.append(p.link)
         body_lines.append("")
         body_lines.append(summary)
-        body_lines.append("\n")
+        body_lines.append("")
 
-        db[p.arxiv_id] = {
-            "sent_at": datetime.utcnow().isoformat()
-        }
+        if p.arxiv_id:
+            db[p.arxiv_id] = {"sent_at": datetime.now(UTC).isoformat()}
 
     save_db(db)
-
-    send_email(
-        "\n".join(body_lines),
-        f"Paper Digest {datetime.utcnow().strftime('%Y-%m-%d')}"
-    )
+    send_email("\n".join(body_lines), f"Paper Digest {datetime.now(JST).strftime('%Y-%m-%d')}")
 
 
 if __name__ == "__main__":
