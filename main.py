@@ -9,6 +9,7 @@ from email.message import EmailMessage
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from openai import OpenAI
+from datetime import datetime, timedelta, timezone
 
 
 ARXIV_URL = "http://export.arxiv.org/api/query"
@@ -67,16 +68,23 @@ def save_db(db):
 
 def clean_db(db):
 
-    limit = datetime.utcnow() - timedelta(days=90)
+    limit = datetime.now(timezone.utc) - timedelta(days=90)
 
     new = {}
 
-    for k,v in db.items():
+    for k, v in db.items():
 
         t = datetime.fromisoformat(v["sent_at"])
 
+        # tz無しならUTC付与
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=timezone.utc)
+
+        # tz付きならUTCに統一
+        t = t.astimezone(timezone.utc)
+
         if t > limit:
-            new[k]=v
+            new[k] = v
 
     return new
 
@@ -280,3 +288,4 @@ def main():
 
 if __name__=="__main__":
     main()
+
