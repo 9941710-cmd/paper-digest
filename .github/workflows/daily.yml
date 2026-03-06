@@ -2,7 +2,7 @@ name: Daily Paper Digest
 
 on:
   schedule:
-    - cron: "*/5 * * * *"   # 5分ごと実行（GitHub遅延対策）
+    - cron: "*/30 * * * *"   # 30分ごと実行（GitHub遅延対策）
   workflow_dispatch:
   push:
 
