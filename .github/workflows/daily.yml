@@ -2,9 +2,8 @@ name: Daily Paper Digest
 
 on:
   schedule:
-    - cron: "*/30 * * * *"   # 30分ごと実行（GitHub遅延対策）
+    - cron: "0 0 * * *"   # 毎日 09:00 JST
   workflow_dispatch:
-  push:
 
 jobs:
   run-agent:
@@ -28,9 +27,11 @@ jobs:
       - name: Run agent
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          GMAIL_TOKEN: ${{ secrets.GMAIL_TOKEN }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
           SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+          OPENALEX_EMAIL: ${{ secrets.OPENALEX_EMAIL }}
+          SEMANTIC_SCHOLAR_API_KEY: ${{ secrets.SEMANTIC_SCHOLAR_API_KEY }}
         run: python main.py
 
       - name: Commit sent history
