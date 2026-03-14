@@ -13,6 +13,7 @@ jobs:
       contents: write
 
     steps:
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -24,6 +25,27 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      # -----------------------------
+      # Debug step (環境変数確認)
+      # -----------------------------
+      - name: Debug env presence
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
+          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+        run: |
+          python - <<'PY'
+          import os
+          print("OPENAI_API_KEY:", "OPENAI_API_KEY" in os.environ)
+          print("SMTP_PASSWORD:", "SMTP_PASSWORD" in os.environ)
+          print("RECIPIENT_EMAIL:", "RECIPIENT_EMAIL" in os.environ)
+          print("SENDER_EMAIL:", "SENDER_EMAIL" in os.environ)
+          PY
+
+      # -----------------------------
+      # 論文収集エージェント実行
+      # -----------------------------
       - name: Run agent
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -34,6 +56,9 @@ jobs:
           SEMANTIC_SCHOLAR_API_KEY: ${{ secrets.SEMANTIC_SCHOLAR_API_KEY }}
         run: python main.py
 
+      # -----------------------------
+      # 送信履歴コミット
+      # -----------------------------
       - name: Commit sent history
         run: |
           git config user.name "github-actions"
