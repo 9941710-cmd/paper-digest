@@ -2,6 +2,7 @@ import os
 import json
 import time
 import html
+import re
 import smtplib
 import requests
 import xml.etree.ElementTree as ET
@@ -14,30 +15,53 @@ from openai import OpenAI
 ARXIV_URL = "http://export.arxiv.org/api/query"
 
 KEYWORDS = [
-    "self aligned",
-    "self-aligned",
-    "metasurface",
-    "metalens",
-    "nanoimprint",
-    "NIL",
-    "atomic layer deposition",
-    "ALD",
-    "atomic layer etching",
-    "ALE",
+    # Material / platform
+    "InP",
+    "InGaAs",
+    "InGaAsP",
+    "III-V",
+    "quantum well",
+    "MQW",
+
+    # Device
+    "laser",
+    "semiconductor laser",
+    "DFB laser",
+    "DBR laser",
+    "electro-absorption modulator",
+    "EAM",
+    "photodiode",
+    "photonic integrated circuit",
+    "PIC",
+    "ridge waveguide",
+    "buried heterostructure",
+
+    # Process
+    "nanofabrication",
+    "dry etch",
+    "ICP etch",
     "reactive ion etching",
     "RIE",
-    "dry etch",
-    "nanofabrication",
-    "TiO2",
-    "high aspect ratio",
+    "atomic layer deposition",
+    "ALD",
+    "regrowth",
+    "epitaxial regrowth",
+    "selective area growth",
+    "waveguide",
+
+    # Application
+    "optical communication",
+    "telecom",
+    "1.55 um",
+    "C-band",
+    "silicon photonics",
+    "heterogeneous integration"
 ]
 
 CATEGORIES = [
-    "cond-mat.mtrl-sci",
     "physics.app-ph",
     "physics.optics",
-    "cond-mat.mes-hall",
-    "cond-mat.other",
+    "cond-mat.mtrl-sci",
 ]
 
 OPENALEX_EMAIL = os.environ.get("OPENALEX_EMAIL", "")
@@ -90,29 +114,81 @@ def score_paper(text):
     t = (text or "").lower()
     score = 0
 
-    if "metasurface" in t or "metalens" in t:
+    # Strongly preferred materials
+    if "inp" in t:
+        score += 18
+    if "ingaas" in t:
+        score += 12
+    if "ingaasp" in t:
+        score += 14
+    if "iii-v" in t or "iii/v" in t:
         score += 10
+    if "quantum well" in t or "mqw" in t:
+        score += 8
 
-    if "self aligned" in t or "self-aligned" in t:
+    # Device relevance
+    if "laser" in t:
+        score += 12
+    if "semiconductor laser" in t:
         score += 10
+    if "dfb laser" in t or "distributed feedback laser" in t:
+        score += 16
+    if "dbr laser" in t:
+        score += 12
+    if "electro-absorption modulator" in t or "eam" in t:
+        score += 10
+    if "photodiode" in t:
+        score += 8
+    if "photonic integrated circuit" in t or re.search(r"\bpic\b", t):
+        score += 10
+    if "ridge waveguide" in t:
+        score += 12
+    if "buried heterostructure" in t:
+        score += 10
+    if "waveguide" in t:
+        score += 6
 
-    if "nanoimprint" in t or "nil" in t:
-        score += 7
-
+    # Process relevance
+    if "dry etch" in t:
+        score += 10
+    if "icp etch" in t or "inductively coupled plasma" in t:
+        score += 10
+    if "rie" in t or "reactive ion etching" in t:
+        score += 8
     if "ald" in t or "atomic layer deposition" in t:
-        score += 7
-
-    if "etch" in t or "rie" in t or "ale" in t:
         score += 5
-
-    if "tio2" in t:
+    if "regrowth" in t:
+        score += 12
+    if "epitaxial regrowth" in t:
+        score += 12
+    if "selective area growth" in t:
+        score += 10
+    if "nanofabrication" in t:
         score += 4
 
-    if "nanofabrication" in t:
-        score += 3
+    # Application relevance
+    if "optical communication" in t:
+        score += 12
+    if "telecom" in t:
+        score += 8
+    if "1.55 um" in t or "1.55μm" in t or "1550 nm" in t:
+        score += 8
+    if "c-band" in t:
+        score += 8
+    if "silicon photonics" in t:
+        score += 8
+    if "heterogeneous integration" in t:
+        score += 8
 
-    if "high aspect ratio" in t:
-        score += 3
+    # De-prioritize broader nano topics less aligned with your goal
+    if "metasurface" in t:
+        score -= 4
+    if "metalens" in t:
+        score -= 4
+    if "nanoimprint" in t or re.search(r"\bnil\b", t):
+        score -= 3
+    if "tio2" in t:
+        score -= 2
 
     return score
 
@@ -159,10 +235,11 @@ def build_abstract_from_inverted_index(inv):
 def strip_html_tags(text):
     if not text:
         return ""
+
     text = html.unescape(text)
-    text = text.replace("<jats:p>", " ").replace("</jats:p>", " ")
-    text = ET.fromstring(f"<root>{text}</root>").itertext() if "<" in text else [text]
-    return normalize_whitespace(" ".join(text))
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
 
 
 # ------------------------------
@@ -235,7 +312,11 @@ def search_openalex():
 
         if not link:
             primary_location = w.get("primary_location") or {}
-            link = normalize_whitespace(primary_location.get("landing_page_url") or primary_location.get("pdf_url") or "")
+            link = normalize_whitespace(
+                primary_location.get("landing_page_url")
+                or primary_location.get("pdf_url")
+                or ""
+            )
 
         if title and link:
             papers.append({
@@ -253,12 +334,12 @@ def search_openalex():
 # ------------------------------
 
 def search_semantic_scholar():
-    query = " OR ".join(KEYWORDS)
+    query = " OR ".join(KEYWORDS[:10])
     url = "https://api.semanticscholar.org/graph/v1/paper/search"
 
     params = {
         "query": query,
-        "limit": 25,
+        "limit": 10,
         "fields": "title,abstract,url,year,publicationDate",
     }
 
@@ -268,8 +349,12 @@ def search_semantic_scholar():
 
     print("fetching Semantic Scholar", params)
 
-    r = request_with_retry(url, params=params, headers=headers, timeout=60)
-    data = r.json()
+    try:
+        r = request_with_retry(url, params=params, headers=headers, timeout=60, retries=2, sleep_sec=10)
+        data = r.json()
+    except Exception as e:
+        print(f"search_semantic_scholar failed: {e}")
+        return []
 
     papers = []
 
@@ -294,7 +379,15 @@ def search_semantic_scholar():
 # ------------------------------
 
 def search_crossref():
-    query = " ".join(KEYWORDS[:6])
+    query = " ".join([
+        "InP",
+        "InGaAsP",
+        "laser",
+        "DFB",
+        "waveguide",
+        "regrowth",
+    ])
+
     url = "https://api.crossref.org/works"
 
     params = {
@@ -374,8 +467,13 @@ def summarize(title, abstract):
 
     prompt = f"""
 以下の論文を日本語で5〜10行で要約してください。
-ナノ加工プロセス・材料・装置条件があれば優先して書いてください。
-要約は簡潔で、研究者向けにしてください。
+特に以下の観点を優先してください。
+- InP / InGaAs / InGaAsP / III-V などの材料系
+- レーザー、DFB、DBR、EAM、PD、PIC などのデバイス系
+- エッチング、regrowth、導波路形成、集積プロセス
+- 光通信用途との関係
+
+研究者向けに、簡潔だけど技術的な中身が分かるように書いてください。
 
 title:
 {title}
@@ -405,7 +503,7 @@ def send_email(body):
     msg = EmailMessage()
     msg["To"] = recipient
     msg["From"] = sender
-    msg["Subject"] = "Nanofabrication Paper Digest"
+    msg["Subject"] = "InP / Laser / Nanofabrication Paper Digest"
     msg.set_content(body)
 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
@@ -451,7 +549,7 @@ def main():
         return
 
     body_lines = []
-    body_lines.append("Nanofabrication Paper Digest")
+    body_lines.append("InP / Laser / Nanofabrication Paper Digest")
     body_lines.append("")
 
     for p in selected:
