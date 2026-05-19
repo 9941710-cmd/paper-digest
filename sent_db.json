@@ -2173,5 +2173,20 @@
   },
   "https://doi.org/10.1016/j.optlastec.2026.115506": {
     "sent_at": "2026-05-18T04:08:54.020634+00:00"
+  },
+  "https://www.semanticscholar.org/paper/23f9f55f7ddb5c31e7ec71e93b2f7c6c8c9cd10a": {
+    "sent_at": "2026-05-19T04:01:11.818920+00:00"
+  },
+  "https://openalex.org/W7161303221": {
+    "sent_at": "2026-05-19T04:01:14.318499+00:00"
+  },
+  "https://openalex.org/W7160672556": {
+    "sent_at": "2026-05-19T04:01:19.809975+00:00"
+  },
+  "https://openalex.org/W7160677922": {
+    "sent_at": "2026-05-19T04:01:22.679341+00:00"
+  },
+  "https://openalex.org/W7152938048": {
+    "sent_at": "2026-05-19T04:01:24.298632+00:00"
   }
 }
