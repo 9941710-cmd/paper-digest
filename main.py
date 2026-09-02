@@ -27,119 +27,65 @@ client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
 
 # ============================================================
-# Search keywords
+# Search queries
 #
-# Priority:
-#   1. HOE / holographic exposure / inspection
-#   2. HOE materials / optical properties
-#   3. Micro-optics / fabrication
-#   4. AR waveguide / diffractive optics
-#   5. Future: CPO / optical interconnect / InP
+# ポイント：
+# 1個の巨大な検索式にせず、複数の比較的広い検索を実行する。
+# その後score_paper()で順位付けする。
 # ============================================================
 
-KEYWORDS = [
+SEARCH_QUERIES = [
 
-    # --------------------------------------------------------
     # HOE / holography
-    # --------------------------------------------------------
     "holographic optical element",
-    "HOE",
     "volume hologram",
     "volume holographic grating",
     "volume phase grating",
     "holographic grating",
-    "holographic waveguide",
-    "holographic recording",
 
-    # --------------------------------------------------------
-    # Exposure / recording
-    # --------------------------------------------------------
-    "holographic exposure",
+    # recording / exposure
+    "holographic recording",
     "interference exposure",
     "interference lithography",
-    "two beam interference",
     "laser interference lithography",
-    "holographic recording",
-    "laser direct writing",
-    "direct laser writing",
-    "spatial light modulator",
-    "SLM",
-    "phase modulation",
-    "exposure uniformity",
-    "dose uniformity",
+    "two beam interference",
 
-    # --------------------------------------------------------
-    # HOE materials
-    # --------------------------------------------------------
-    "photopolymer",
-    "photosensitive material",
-    "photosensitive film",
-    "holographic material",
+    # materials
+    "photopolymer hologram",
+    "holographic photopolymer",
     "refractive index modulation",
-    "index modulation",
-    "photoresist",
-    "volume phase hologram",
+    "photosensitive holographic material",
 
-    # --------------------------------------------------------
-    # Inspection / metrology
-    # --------------------------------------------------------
-    "diffraction efficiency",
-    "diffraction angle",
-    "angular selectivity",
-    "spectral selectivity",
-    "wavefront measurement",
-    "wavefront metrology",
-    "interferometry",
-    "phase measurement",
-    "optical metrology",
+    # inspection / characterization
+    "diffraction efficiency grating",
+    "angular selectivity hologram",
+    "spectral selectivity hologram",
+    "wavefront grating",
     "grating uniformity",
-    "diffraction uniformity",
-    "scattering measurement",
+    "diffractive optical metrology",
 
-    # --------------------------------------------------------
-    # Diffractive optics / AR
-    # --------------------------------------------------------
-    "diffractive optical element",
-    "DOE",
-    "diffraction grating",
-    "grating coupler",
+    # AR / waveguide
+    "diffractive waveguide",
+    "holographic waveguide",
     "waveguide display",
-    "AR waveguide",
     "augmented reality waveguide",
-    "near eye display",
-    "near-eye display",
-    "pupil expansion",
-    "exit pupil expansion",
+    "near eye display grating",
 
-    # --------------------------------------------------------
-    # Micro / nano fabrication
-    # --------------------------------------------------------
-    "micro optical element",
-    "micro-optics",
-    "nanofabrication",
-    "nanoimprint",
-    "nanoimprint lithography",
-    "electron beam lithography",
-    "EBL",
-    "dry etch",
-    "reactive ion etching",
-    "RIE",
-    "atomic layer deposition",
-    "ALD",
+    # exposure equipment related
+    "spatial light modulator lithography",
+    "spatial light modulator holography",
+    "laser direct writing grating",
+    "phase modulation holography",
 
-    # --------------------------------------------------------
-    # Future: optical communication / CPO
-    # --------------------------------------------------------
+    # broad fallback
+    "diffraction grating fabrication",
+    "diffractive optical element fabrication",
+    "micro optical fabrication",
+
+    # future themes
     "co-packaged optics",
-    "CPO",
     "optical interconnect",
-    "data center optics",
-    "short reach optical communication",
     "silicon photonics",
-    "photonic integrated circuit",
-    "PIC",
-    "heterogeneous integration",
-    "III-V integration",
     "InP photonics",
 ]
 
@@ -169,6 +115,7 @@ def load_db():
         "r",
         encoding="utf-8"
     ) as f:
+
         return json.load(f)
 
 
@@ -190,50 +137,100 @@ def save_db(db):
 
 def clean_db(db):
 
+    # 60日に短縮。
+    # 古い論文が再候補になる余地を少し増やす。
     limit = (
         datetime.now(timezone.utc)
-        - timedelta(days=90)
+        - timedelta(days=60)
     )
 
-    new = {}
+    new_db = {}
 
-    for k, v in db.items():
+    for key, value in db.items():
 
         try:
 
-            t = datetime.fromisoformat(
-                v["sent_at"]
+            sent_at = datetime.fromisoformat(
+                value["sent_at"]
             )
 
-            if t.tzinfo is None:
-                t = t.replace(
+            if sent_at.tzinfo is None:
+
+                sent_at = sent_at.replace(
                     tzinfo=timezone.utc
                 )
 
-            t = t.astimezone(
-                timezone.utc
-            )
-
-            if t > limit:
-                new[k] = v
+            if sent_at > limit:
+                new_db[key] = value
 
         except Exception:
             continue
 
-    return new
+    return new_db
 
 
 # ============================================================
 # Utility
 # ============================================================
 
-def normalize_whitespace(s):
+def normalize_whitespace(text):
 
-    if not s:
+    if not text:
         return ""
 
     return " ".join(
-        str(s).split()
+        str(text).split()
+    )
+
+
+def normalize_title(title):
+
+    title = title.lower()
+
+    title = re.sub(
+        r"[^a-z0-9]+",
+        "",
+        title
+    )
+
+    return title
+
+
+def strip_html_tags(text):
+
+    if not text:
+        return ""
+
+    text = html.unescape(text)
+
+    text = re.sub(
+        r"<[^>]+>",
+        " ",
+        text
+    )
+
+    return re.sub(
+        r"\s+",
+        " ",
+        text
+    ).strip()
+
+
+def build_abstract_from_inverted_index(inv):
+
+    if not inv:
+        return ""
+
+    positions = {}
+
+    for word, indexes in inv.items():
+
+        for index in indexes:
+            positions[index] = word
+
+    return " ".join(
+        positions[i]
+        for i in sorted(positions)
     )
 
 
@@ -253,16 +250,16 @@ def request_with_retry(
 
         try:
 
-            r = requests.get(
+            response = requests.get(
                 url,
                 params=params,
                 headers=headers,
                 timeout=timeout
             )
 
-            r.raise_for_status()
+            response.raise_for_status()
 
-            return r
+            return response
 
         except Exception as e:
 
@@ -270,55 +267,13 @@ def request_with_retry(
 
             print(
                 f"request failed "
-                f"({i + 1}/{retries}) "
-                f"url={url} "
-                f"error={e}"
+                f"{i + 1}/{retries}: {e}"
             )
 
             if i < retries - 1:
                 time.sleep(sleep_sec)
 
     raise last_error
-
-
-def build_abstract_from_inverted_index(inv):
-
-    if not inv:
-        return ""
-
-    positions = {}
-
-    for word, pos_list in inv.items():
-
-        for pos in pos_list:
-            positions[pos] = word
-
-    return " ".join(
-        positions[i]
-        for i in sorted(positions)
-    )
-
-
-def strip_html_tags(text):
-
-    if not text:
-        return ""
-
-    text = html.unescape(text)
-
-    text = re.sub(
-        r"<[^>]+>",
-        " ",
-        text
-    )
-
-    text = re.sub(
-        r"\s+",
-        " ",
-        text
-    ).strip()
-
-    return text
 
 
 # ============================================================
@@ -333,20 +288,19 @@ def score_paper(text):
 
 
     # ========================================================
-    # TIER 1
-    # HOE itself
+    # HOE / volume hologram
     # ========================================================
 
     if "holographic optical element" in t:
-        score += 40
+        score += 50
 
     if re.search(r"\bhoe\b", t):
         score += 35
 
     if "volume hologram" in t:
-        score += 30
+        score += 35
 
-    if "volume holographic grating" in t:
+    if "volume holographic" in t:
         score += 35
 
     if "volume phase grating" in t:
@@ -358,313 +312,295 @@ def score_paper(text):
     if "holographic waveguide" in t:
         score += 35
 
+
+    # ========================================================
+    # Recording / exposure
+    # ========================================================
+
     if "holographic recording" in t:
-        score += 25
-
-
-    # ========================================================
-    # TIER 1
-    # Exposure / recording
-    # ========================================================
-
-    if "holographic exposure" in t:
-        score += 35
+        score += 30
 
     if "interference exposure" in t:
-        score += 32
+        score += 30
 
     if "interference lithography" in t:
-        score += 28
+        score += 25
 
     if "laser interference lithography" in t:
         score += 30
 
     if "two beam interference" in t:
-        score += 25
+        score += 22
 
-    if "laser direct writing" in t:
-        score += 18
+    if "two-beam interference" in t:
+        score += 22
 
     if "direct laser writing" in t:
-        score += 18
+        score += 15
+
+    if "laser direct writing" in t:
+        score += 15
 
     if "spatial light modulator" in t:
         score += 18
 
     if re.search(r"\bslm\b", t):
-        score += 12
+        score += 10
 
     if "phase modulation" in t:
-        score += 15
+        score += 12
 
     if "exposure uniformity" in t:
         score += 25
 
     if "dose uniformity" in t:
-        score += 20
-
-
-    # ========================================================
-    # TIER 1
-    # Inspection / metrology
-    # ========================================================
-
-    if "diffraction efficiency" in t:
-        score += 30
-
-    if "diffraction angle" in t:
-        score += 20
-
-    if "angular selectivity" in t:
-        score += 28
-
-    if "spectral selectivity" in t:
-        score += 25
-
-    if "wavefront measurement" in t:
-        score += 25
-
-    if "wavefront metrology" in t:
-        score += 28
-
-    if "interferometry" in t:
-        score += 15
-
-    if "phase measurement" in t:
-        score += 15
-
-    if "optical metrology" in t:
-        score += 18
-
-    if "grating uniformity" in t:
-        score += 28
-
-    if "diffraction uniformity" in t:
-        score += 30
-
-    if "scattering measurement" in t:
         score += 15
 
 
     # ========================================================
-    # TIER 2
-    # Materials / films
+    # Materials
     # ========================================================
 
     if "photopolymer" in t:
-        score += 28
+        score += 25
 
     if "photosensitive material" in t:
-        score += 20
+        score += 15
 
     if "photosensitive film" in t:
-        score += 22
+        score += 15
 
     if "holographic material" in t:
-        score += 25
+        score += 22
 
     if "refractive index modulation" in t:
         score += 28
 
     if "index modulation" in t:
-        score += 20
-
-    if "volume phase hologram" in t:
-        score += 30
+        score += 18
 
     if "photoresist" in t:
-        score += 8
+        score += 5
 
 
     # ========================================================
-    # TIER 2
-    # AR / diffractive optics
+    # Evaluation / metrology
+    # ========================================================
+
+    if "diffraction efficiency" in t:
+        score += 30
+
+    if "angular selectivity" in t:
+        score += 25
+
+    if "spectral selectivity" in t:
+        score += 22
+
+    if "wavefront" in t:
+        score += 15
+
+    if "wavefront measurement" in t:
+        score += 10
+
+    if "wavefront metrology" in t:
+        score += 15
+
+    if "interferometry" in t:
+        score += 10
+
+    if "optical metrology" in t:
+        score += 12
+
+    if "uniformity" in t:
+        score += 10
+
+    if "grating uniformity" in t:
+        score += 15
+
+    if "scatter" in t:
+        score += 6
+
+    if "scattering" in t:
+        score += 6
+
+
+    # ========================================================
+    # Diffractive optics / AR
     # ========================================================
 
     if "diffractive optical element" in t:
         score += 18
 
+    if re.search(r"\bdoe\b", t):
+        score += 8
+
     if "diffraction grating" in t:
         score += 15
+
+    if "diffractive waveguide" in t:
+        score += 25
 
     if "waveguide display" in t:
         score += 25
 
-    if "ar waveguide" in t:
-        score += 25
-
-    if "augmented reality waveguide" in t:
-        score += 28
-
-    if "near eye display" in t:
-        score += 18
-
-    if "near-eye display" in t:
-        score += 18
-
-    if "pupil expansion" in t:
-        score += 20
-
-    if "exit pupil expansion" in t:
-        score += 22
-
-    if "grating coupler" in t:
+    if "augmented reality" in t:
         score += 12
 
+    if "near-eye display" in t:
+        score += 12
+
+    if "near eye display" in t:
+        score += 12
+
+    if "pupil expansion" in t:
+        score += 15
+
+    if "exit pupil" in t:
+        score += 15
+
 
     # ========================================================
-    # TIER 3
-    # Micro / nano fabrication
+    # Fabrication
     # ========================================================
 
-    if "micro-optics" in t:
-        score += 10
-
-    if "micro optical element" in t:
-        score += 10
+    if "fabrication" in t:
+        score += 5
 
     if "nanofabrication" in t:
+        score += 8
+
+    if "microfabrication" in t:
         score += 8
 
     if "nanoimprint" in t:
         score += 8
 
     if "electron beam lithography" in t:
-        score += 6
-
-    if re.search(r"\bebl\b", t):
         score += 5
 
     if "dry etch" in t:
-        score += 5
+        score += 4
 
     if "reactive ion etching" in t:
-        score += 5
-
-    if "atomic layer deposition" in t:
         score += 4
 
 
     # ========================================================
-    # TIER 4
-    # Future optical communication / CPO
+    # Future: optical communication / CPO
     # ========================================================
 
     if "co-packaged optics" in t:
-        score += 14
-
-    if re.search(r"\bcpo\b", t):
-        score += 10
-
-    if "optical interconnect" in t:
         score += 12
 
-    if "data center optics" in t:
-        score += 10
-
-    if "short reach optical communication" in t:
-        score += 10
-
-    if "silicon photonics" in t:
+    if re.search(r"\bcpo\b", t):
         score += 8
 
-    if "photonic integrated circuit" in t:
+    if "optical interconnect" in t:
+        score += 10
+
+    if "data center" in t and "optical" in t:
+        score += 8
+
+    if "silicon photonics" in t:
+        score += 7
+
+    if "inp photonics" in t:
         score += 7
 
     if "heterogeneous integration" in t:
-        score += 8
-
-    if "iii-v integration" in t:
-        score += 8
-
-    if "inp photonics" in t:
-        score += 8
+        score += 6
 
 
     # ========================================================
     # Combination bonuses
-    #
-    # These are important.
-    # A paper containing both HOE and measurement/exposure
-    # should rank much higher than a generic holography paper.
     # ========================================================
 
-    hoe_terms = [
-        "holographic optical element",
-        "volume hologram",
-        "holographic grating",
-        "holographic waveguide",
-        "volume phase grating",
+    holography_terms = [
+        "hologram",
+        "holographic",
+        "volume grating",
+        "volume phase",
     ]
 
     exposure_terms = [
         "exposure",
         "recording",
         "interference",
-        "laser",
-        "spatial light modulator",
+        "writing",
     ]
 
     measurement_terms = [
         "diffraction efficiency",
+        "selectivity",
         "wavefront",
         "uniformity",
-        "angular selectivity",
-        "spectral selectivity",
         "metrology",
         "measurement",
     ]
 
-    has_hoe = any(
-        term in t
-        for term in hoe_terms
+    material_terms = [
+        "photopolymer",
+        "photosensitive",
+        "index modulation",
+    ]
+
+    has_holography = any(
+        x in t for x in holography_terms
     )
 
     has_exposure = any(
-        term in t
-        for term in exposure_terms
+        x in t for x in exposure_terms
     )
 
     has_measurement = any(
-        term in t
-        for term in measurement_terms
+        x in t for x in measurement_terms
     )
 
-    if has_hoe and has_exposure:
+    has_material = any(
+        x in t for x in material_terms
+    )
+
+    if has_holography and has_exposure:
         score += 25
 
-    if has_hoe and has_measurement:
-        score += 30
+    if has_holography and has_measurement:
+        score += 25
+
+    if has_holography and has_material:
+        score += 20
 
     if (
-        has_hoe
+        has_holography
         and has_exposure
         and has_measurement
     ):
-        score += 30
+        score += 25
 
 
     # ========================================================
     # Noise reduction
     # ========================================================
 
-    if "digital holography" in t:
-        score -= 12
-
     if "holographic microscopy" in t:
-        score -= 20
+        score -= 40
+
+    if "digital holographic microscopy" in t:
+        score -= 40
 
     if "biomedical" in t:
-        score -= 20
+        score -= 25
 
     if "biological" in t:
-        score -= 15
-
-    if "medical imaging" in t:
         score -= 20
 
-    if "acoustic" in t:
-        score -= 15
+    if "medical imaging" in t:
+        score -= 25
+
+    if "cell imaging" in t:
+        score -= 25
+
+    if "acoustic holography" in t:
+        score -= 30
 
     return score
 
@@ -675,92 +611,133 @@ def score_paper(text):
 
 def search_arxiv():
 
-    query = " OR ".join(
-        [
-            f'all:"{k}"'
-            for k in KEYWORDS
-        ]
-    )
-
-    cat = " OR ".join(
-        [
-            f"cat:{c}"
-            for c in CATEGORIES
-        ]
-    )
-
-    params = {
-        "search_query":
-            f"({cat}) AND ({query})",
-        "start": 0,
-        "max_results": 100,
-        "sortBy": "submittedDate",
-        "sortOrder": "descending",
-    }
-
-    print("fetching arXiv")
-
-    r = request_with_retry(
-        ARXIV_URL,
-        params=params,
-        timeout=60
-    )
-
-    root = ET.fromstring(r.text)
-
-    ns = {
-        "atom":
-            "http://www.w3.org/2005/Atom"
-    }
-
     papers = []
 
-    for e in root.findall(
-        "atom:entry",
-        ns
-    ):
+    # arXivはクエリを分割して検索する
+    # → HOEという単語がない関連論文も拾いやすい
+    arxiv_queries = [
 
-        title_node = e.find(
-            "atom:title",
-            ns
-        )
+        (
+            'all:"volume hologram" '
+            'OR all:"holographic grating" '
+            'OR all:"holographic recording"'
+        ),
 
-        abstract_node = e.find(
-            "atom:summary",
-            ns
-        )
+        (
+            'all:"photopolymer" '
+            'OR all:"refractive index modulation"'
+        ),
 
-        link_node = e.find(
-            "atom:id",
-            ns
-        )
+        (
+            'all:"diffraction efficiency" '
+            'OR all:"angular selectivity"'
+        ),
 
-        title = normalize_whitespace(
-            title_node.text
-            if title_node is not None
-            else ""
-        )
+        (
+            'all:"diffractive waveguide" '
+            'OR all:"waveguide display"'
+        ),
 
-        abstract = normalize_whitespace(
-            abstract_node.text
-            if abstract_node is not None
-            else ""
-        )
+        (
+            'all:"interference lithography" '
+            'OR all:"laser interference"'
+        ),
 
-        link = normalize_whitespace(
-            link_node.text
-            if link_node is not None
-            else ""
-        )
+        (
+            'all:"diffractive optical element" '
+            'OR all:"diffraction grating"'
+        ),
+    ]
 
-        if title and link:
+    categories = " OR ".join(
+        f"cat:{cat}"
+        for cat in CATEGORIES
+    )
 
-            papers.append({
-                "title": title,
-                "abstract": abstract,
-                "link": link,
-                "source": "arXiv",
-            })
+    for query in arxiv_queries:
+
+        try:
+
+            params = {
+                "search_query":
+                    f"({categories}) AND ({query})",
+                "start": 0,
+                "max_results": 30,
+                "sortBy": "submittedDate",
+                "sortOrder": "descending",
+            }
+
+            response = request_with_retry(
+                ARXIV_URL,
+                params=params,
+                timeout=60
+            )
+
+            root = ET.fromstring(
+                response.text
+            )
+
+            ns = {
+                "atom":
+                    "http://www.w3.org/2005/Atom"
+            }
+
+            for entry in root.findall(
+                "atom:entry",
+                ns
+            ):
+
+                title_node = entry.find(
+                    "atom:title",
+                    ns
+                )
+
+                abstract_node = entry.find(
+                    "atom:summary",
+                    ns
+                )
+
+                link_node = entry.find(
+                    "atom:id",
+                    ns
+                )
+
+                title = normalize_whitespace(
+                    title_node.text
+                    if title_node is not None
+                    else ""
+                )
+
+                abstract = normalize_whitespace(
+                    abstract_node.text
+                    if abstract_node is not None
+                    else ""
+                )
+
+                link = normalize_whitespace(
+                    link_node.text
+                    if link_node is not None
+                    else ""
+                )
+
+                if title and link:
+
+                    papers.append({
+                        "title": title,
+                        "abstract": abstract,
+                        "link": link,
+                        "source": "arXiv",
+                    })
+
+            time.sleep(1)
+
+        except Exception as e:
+
+            print(
+                "arXiv query failed:",
+                query,
+                e
+            )
 
     return papers
 
@@ -771,17 +748,7 @@ def search_arxiv():
 
 def search_openalex():
 
-    query = " OR ".join(KEYWORDS)
-
-    url = (
-        "https://api.openalex.org/works"
-    )
-
-    params = {
-        "search": query,
-        "sort": "publication_date:desc",
-        "per-page": 50,
-    }
+    papers = []
 
     headers = {}
 
@@ -792,68 +759,115 @@ def search_openalex():
             f"(mailto:{OPENALEX_EMAIL})"
         )
 
-    print("fetching OpenAlex")
+    # OpenAlexも複数の短い検索にする
+    queries = [
 
-    r = request_with_retry(
-        url,
-        params=params,
-        headers=headers,
-        timeout=60
-    )
+        "volume hologram",
 
-    data = r.json()
+        "holographic grating",
 
-    papers = []
+        "holographic recording",
 
-    for w in data.get(
-        "results", []
-    ):
+        "photopolymer hologram",
 
-        title = normalize_whitespace(
-            w.get(
-                "display_name", ""
+        "diffraction efficiency hologram",
+
+        "angular selectivity hologram",
+
+        "diffractive waveguide",
+
+        "waveguide display",
+
+        "interference lithography",
+
+        "diffraction grating fabrication",
+
+        "spatial light modulator holography",
+
+        "diffractive optical element",
+    ]
+
+    for query in queries:
+
+        try:
+
+            params = {
+                "search": query,
+                "sort":
+                    "publication_date:desc",
+                "per-page": 15,
+            }
+
+            response = request_with_retry(
+                "https://api.openalex.org/works",
+                params=params,
+                headers=headers,
+                timeout=60
             )
-        )
 
-        abstract = (
-            build_abstract_from_inverted_index(
-                w.get(
-                    "abstract_inverted_index"
+            data = response.json()
+
+            for work in data.get(
+                "results",
+                []
+            ):
+
+                title = normalize_whitespace(
+                    work.get(
+                        "display_name",
+                        ""
+                    )
                 )
+
+                abstract = (
+                    build_abstract_from_inverted_index(
+                        work.get(
+                            "abstract_inverted_index"
+                        )
+                    )
+                )
+
+                primary_location = (
+                    work.get(
+                        "primary_location"
+                    )
+                    or {}
+                )
+
+                link = (
+                    work.get("doi")
+                    or primary_location.get(
+                        "landing_page_url"
+                    )
+                    or work.get("id")
+                    or ""
+                )
+
+                link = normalize_whitespace(
+                    link
+                )
+
+                if title and link:
+
+                    papers.append({
+                        "title": title,
+                        "abstract":
+                            normalize_whitespace(
+                                abstract
+                            ),
+                        "link": link,
+                        "source": "OpenAlex",
+                    })
+
+            time.sleep(0.5)
+
+        except Exception as e:
+
+            print(
+                "OpenAlex query failed:",
+                query,
+                e
             )
-        )
-
-        # Prefer DOI or landing page over
-        # OpenAlex page when possible.
-        doi = w.get("doi")
-
-        primary_location = (
-            w.get("primary_location")
-            or {}
-        )
-
-        link = (
-            doi
-            or primary_location.get(
-                "landing_page_url"
-            )
-            or w.get("id")
-            or ""
-        )
-
-        link = normalize_whitespace(link)
-
-        if title and link:
-
-            papers.append({
-                "title": title,
-                "abstract":
-                    normalize_whitespace(
-                        abstract
-                    ),
-                "link": link,
-                "source": "OpenAlex",
-            })
 
     return papers
 
@@ -864,31 +878,14 @@ def search_openalex():
 
 def search_semantic_scholar():
 
-    # Keep this shorter because the public endpoint
-    # is more sensitive to rate limits.
-    query_terms = [
-        "holographic optical element",
-        "holographic exposure",
+    papers = []
+
+    queries = [
         "volume hologram",
-        "diffraction efficiency",
-        "waveguide display",
-        "photopolymer",
+        "holographic grating",
+        "photopolymer hologram",
+        "diffractive waveguide",
     ]
-
-    query = " OR ".join(query_terms)
-
-    url = (
-        "https://api.semanticscholar.org/"
-        "graph/v1/paper/search"
-    )
-
-    params = {
-        "query": query,
-        "limit": 10,
-        "fields":
-            "title,abstract,url,"
-            "year,publicationDate",
-    }
 
     headers = {}
 
@@ -898,59 +895,78 @@ def search_semantic_scholar():
             SEMANTIC_SCHOLAR_API_KEY
         )
 
-    print(
-        "fetching Semantic Scholar"
-    )
+    for query in queries:
 
-    try:
+        try:
 
-        r = request_with_retry(
-            url,
-            params=params,
-            headers=headers,
-            timeout=60,
-            retries=2,
-            sleep_sec=10
-        )
+            params = {
+                "query": query,
+                "limit": 10,
+                "fields":
+                    "title,abstract,url,"
+                    "year,publicationDate",
+            }
 
-        data = r.json()
+            response = request_with_retry(
+                (
+                    "https://api.semanticscholar.org/"
+                    "graph/v1/paper/search"
+                ),
+                params=params,
+                headers=headers,
+                timeout=60,
+                retries=2,
+                sleep_sec=10
+            )
 
-    except Exception as e:
+            data = response.json()
 
-        print(
-            "Semantic Scholar failed:",
-            e
-        )
+            for paper in data.get(
+                "data",
+                []
+            ):
 
-        return []
+                title = normalize_whitespace(
+                    paper.get(
+                        "title",
+                        ""
+                    )
+                )
 
-    papers = []
+                abstract = normalize_whitespace(
+                    paper.get(
+                        "abstract",
+                        ""
+                    )
+                )
 
-    for p in data.get(
-        "data", []
-    ):
+                link = normalize_whitespace(
+                    paper.get(
+                        "url",
+                        ""
+                    )
+                )
 
-        title = normalize_whitespace(
-            p.get("title", "")
-        )
+                if title and link:
 
-        abstract = normalize_whitespace(
-            p.get("abstract", "")
-        )
+                    papers.append({
+                        "title": title,
+                        "abstract": abstract,
+                        "link": link,
+                        "source":
+                            "Semantic Scholar",
+                    })
 
-        link = normalize_whitespace(
-            p.get("url", "")
-        )
+            time.sleep(2)
 
-        if title and link:
+        except Exception as e:
 
-            papers.append({
-                "title": title,
-                "abstract": abstract,
-                "link": link,
-                "source":
-                    "Semantic Scholar",
-            })
+            # 429等でも全体を止めない
+            print(
+                "Semantic Scholar failed:",
+                query,
+                e
+            )
 
     return papers
 
@@ -961,28 +977,15 @@ def search_semantic_scholar():
 
 def search_crossref():
 
-    query = (
-        "holographic optical element "
-        "volume hologram "
-        "holographic exposure "
-        "diffraction efficiency "
-        "waveguide display "
-        "photopolymer"
-    )
+    papers = []
 
-    url = (
-        "https://api.crossref.org/works"
-    )
-
-    params = {
-        "query": query,
-        "rows": 30,
-        "sort": "published",
-        "order": "desc",
-        "select":
-            "DOI,title,abstract,"
-            "URL,published",
-    }
+    queries = [
+        "volume hologram",
+        "holographic grating",
+        "photopolymer holography",
+        "diffractive waveguide",
+        "diffraction grating fabrication",
+    ]
 
     if OPENALEX_EMAIL:
 
@@ -1001,56 +1004,87 @@ def search_crossref():
         "User-Agent": user_agent
     }
 
-    print("fetching Crossref")
+    for query in queries:
 
-    r = request_with_retry(
-        url,
-        params=params,
-        headers=headers,
-        timeout=60
-    )
+        try:
 
-    data = r.json()
+            params = {
+                "query": query,
+                "rows": 15,
+                "sort": "published",
+                "order": "desc",
+                "select":
+                    "DOI,title,abstract,"
+                    "URL,published",
+            }
 
-    papers = []
-
-    items = (
-        data.get("message", {})
-        .get("items", [])
-    )
-
-    for item in items:
-
-        title_list = item.get(
-            "title", []
-        )
-
-        title = (
-            normalize_whitespace(
-                title_list[0]
+            response = request_with_retry(
+                "https://api.crossref.org/works",
+                params=params,
+                headers=headers,
+                timeout=60
             )
-            if title_list
-            else ""
-        )
 
-        abstract = strip_html_tags(
-            item.get(
-                "abstract", ""
+            data = response.json()
+
+            items = (
+                data.get(
+                    "message",
+                    {}
+                )
+                .get(
+                    "items",
+                    []
+                )
             )
-        )
 
-        link = normalize_whitespace(
-            item.get("URL", "")
-        )
+            for item in items:
 
-        if title and link:
+                titles = item.get(
+                    "title",
+                    []
+                )
 
-            papers.append({
-                "title": title,
-                "abstract": abstract,
-                "link": link,
-                "source": "Crossref",
-            })
+                title = (
+                    normalize_whitespace(
+                        titles[0]
+                    )
+                    if titles
+                    else ""
+                )
+
+                abstract = strip_html_tags(
+                    item.get(
+                        "abstract",
+                        ""
+                    )
+                )
+
+                link = normalize_whitespace(
+                    item.get(
+                        "URL",
+                        ""
+                    )
+                )
+
+                if title and link:
+
+                    papers.append({
+                        "title": title,
+                        "abstract": abstract,
+                        "link": link,
+                        "source": "Crossref",
+                    })
+
+            time.sleep(0.5)
+
+        except Exception as e:
+
+            print(
+                "Crossref query failed:",
+                query,
+                e
+            )
 
     return papers
 
@@ -1058,19 +1092,6 @@ def search_crossref():
 # ============================================================
 # Collect / deduplicate
 # ============================================================
-
-def normalize_title_for_dedup(title):
-
-    title = title.lower()
-
-    title = re.sub(
-        r"[^a-z0-9]+",
-        "",
-        title
-    )
-
-    return title
-
 
 def collect_papers():
 
@@ -1083,51 +1104,47 @@ def collect_papers():
         search_crossref,
     ]
 
-    for fn in search_functions:
+    for function in search_functions:
 
         try:
 
-            papers = fn()
+            result = function()
 
             print(
-                f"{fn.__name__}: "
-                f"{len(papers)} papers"
+                f"{function.__name__}: "
+                f"{len(result)} papers"
             )
 
-            all_papers.extend(
-                papers
-            )
+            all_papers.extend(result)
 
         except Exception as e:
 
             print(
-                f"{fn.__name__} "
-                f"failed: {e}"
+                f"{function.__name__} failed:",
+                e
             )
 
-    uniq = {}
+    unique = {}
 
-    for p in all_papers:
+    for paper in all_papers:
 
-        key = (
-            normalize_title_for_dedup(
-                p["title"]
-            )
+        key = normalize_title(
+            paper["title"]
         )
 
         if (
             key
-            and key not in uniq
+            and key not in unique
         ):
-            uniq[key] = p
+            unique[key] = paper
 
     print(
         "unique papers:",
-        len(uniq)
+        len(unique)
     )
 
     return list(
-        uniq.values()
+        unique.values()
     )
 
 
@@ -1147,35 +1164,47 @@ def summarize(
     )
 
     prompt = f"""
-以下の論文を、日本語で研究者向けに要約してください。
+以下の論文を、日本語で研究開発者向けに要約してください。
 
-このDigestでは特に
+主な関心分野は、
 HOE（Holographic Optical Element）の
-露光技術・膜材料・検査評価技術を重視しています。
+膜形成、露光、ホログラム記録、
+回折格子形成、光学評価、検査装置です。
 
-以下の順で書いてください。
+ただしHOEそのものの論文でなくても、
+HOEの露光・検査・材料・装置開発に
+応用できそうな技術であれば評価してください。
+
+以下の形式で回答してください。
 
 【概要】
-論文が何をした研究なのかを2〜3行。
+研究内容を2〜3行。
 
-【HOE・露光との関連】
-HOE、ホログラフィック露光、干渉露光、
-レーザー露光、回折格子形成との関連を説明。
-直接関係がなければ「直接的な関連は薄い」と明記。
+【HOEとの関連】
+HOE、volume hologram、
+photopolymer、diffractive waveguide、
+干渉露光などとの関係。
 
-【材料・プロセス】
-材料、膜、露光条件、波長、プロセス、
-屈折率変調など具体的な情報がabstractにあれば記載。
-abstractに無い数値や条件は推測しないこと。
+直接HOEを扱っていない場合でも、
+応用できそうならその理由を書く。
+
+【露光・プロセス】
+レーザー波長、干渉露光、
+記録方式、膜材料、屈折率変調、
+加工方法などがabstractにあれば説明。
 
 【検査・評価】
-回折効率、角度選択性、波長選択性、
-wavefront、uniformity、scatterなど、
-評価方法や結果があれば記載。
+回折効率、角度選択性、
+波長選択性、wavefront、
+uniformity、scatterなど。
 
-【実務的に気になる点】
-HOEの露光装置・検査装置・プロセス開発の観点から、
-この論文の有用性を1〜3行で説明。
+【実務で使えそうな点】
+HOE膜の露光技術や
+検査装置開発の観点から、
+役立ちそうなポイントを説明。
+
+abstractに存在しない数値や
+条件は推測しないこと。
 
 検索スコア:
 {score}
@@ -1187,7 +1216,7 @@ Abstract:
 {abstract}
 """
 
-    r = (
+    response = (
         client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -1201,7 +1230,8 @@ Abstract:
     )
 
     return (
-        r.choices[0]
+        response
+        .choices[0]
         .message.content
         .strip()
     )
@@ -1265,62 +1295,146 @@ def main():
 
     scored = []
 
-    for p in papers:
+    for paper in papers:
 
         text = (
-            f"{p.get('title', '')} "
-            f"{p.get('abstract', '')}"
+            paper.get(
+                "title",
+                ""
+            )
+            + " "
+            + paper.get(
+                "abstract",
+                ""
+            )
         )
 
-        s = score_paper(text)
+        score = score_paper(
+            text
+        )
 
-        if s <= 0:
+        # 以前は0点以下を除外していたが、
+        # 今回は5点以上なら候補にする
+        if score < 5:
             continue
 
-        p["score"] = s
+        paper["score"] = score
 
-        scored.append(p)
+        scored.append(paper)
 
     scored.sort(
         key=lambda x: x["score"],
         reverse=True
     )
 
-    print(
-        "scored papers:",
-        len(scored)
-    )
+    print("")
+    print("==========================")
+    print("TOP 20 CANDIDATES")
+    print("==========================")
 
-    # Debug: show top candidates
-    print("\nTOP CANDIDATES")
-
-    for p in scored[:10]:
+    for paper in scored[:20]:
 
         print(
-            p["score"],
-            p["source"],
-            p["title"]
+            paper["score"],
+            "|",
+            paper["source"],
+            "|",
+            paper["title"]
         )
+
+    print("==========================")
+    print("")
 
     selected = []
 
-    for p in scored:
+    for paper in scored:
 
         if len(selected) >= 5:
             break
 
-        if p["link"] in db:
+        if paper["link"] in db:
             continue
 
-        selected.append(p)
+        selected.append(
+            paper
+        )
+
+
+    # ========================================================
+    # Fallback
+    #
+    # スコア付き未送信論文が5本未満の場合、
+    # score > 0 の関連論文から補充する。
+    # ========================================================
+
+    if len(selected) < 5:
+
+        fallback = []
+
+        for paper in papers:
+
+            if paper["link"] in db:
+                continue
+
+            if paper in selected:
+                continue
+
+            text = (
+                paper.get(
+                    "title",
+                    ""
+                )
+                + " "
+                + paper.get(
+                    "abstract",
+                    ""
+                )
+            )
+
+            score = score_paper(
+                text
+            )
+
+            if score > 0:
+
+                paper["score"] = score
+
+                fallback.append(
+                    paper
+                )
+
+        fallback.sort(
+            key=lambda x: x["score"],
+            reverse=True
+        )
+
+        for paper in fallback:
+
+            if len(selected) >= 5:
+                break
+
+            selected.append(
+                paper
+            )
+
+
+    # ========================================================
+    # Still nothing
+    # ========================================================
 
     if len(selected) == 0:
 
         send_email(
-            "本日は該当する新着論文がありませんでした。"
+            "本日はHOE・露光・検査・回折光学周辺で、"
+            "未配信の候補論文を取得できませんでした。"
         )
 
         return
+
+
+    # ========================================================
+    # Build email
+    # ========================================================
 
     body_lines = []
 
@@ -1332,8 +1446,9 @@ def main():
     body_lines.append("")
 
     body_lines.append(
-        "HOE膜・露光・検査技術を"
-        "優先して選定した論文です。"
+        "HOE膜・露光・検査に加え、"
+        "回折光学・材料・周辺技術まで"
+        "広めに検索しています。"
     )
 
     body_lines.append("")
@@ -1342,17 +1457,18 @@ def main():
         "================================"
     )
 
-    for index, p in enumerate(
+    for index, paper in enumerate(
         selected,
         start=1
     ):
 
         summary = summarize(
-            p["title"],
-            p.get(
-                "abstract", ""
+            paper["title"],
+            paper.get(
+                "abstract",
+                ""
             ),
-            p["score"]
+            paper["score"]
         )
 
         body_lines.append("")
@@ -1361,22 +1477,23 @@ def main():
         )
 
         body_lines.append(
-            f"Score: {p['score']}"
+            f"Score: "
+            f"{paper['score']}"
         )
 
         body_lines.append(
             f"Source: "
-            f"{p.get('source', 'unknown')}"
+            f"{paper['source']}"
         )
 
         body_lines.append("")
 
         body_lines.append(
-            p["title"]
+            paper["title"]
         )
 
         body_lines.append(
-            p["link"]
+            paper["link"]
         )
 
         body_lines.append("")
@@ -1391,17 +1508,22 @@ def main():
             "================================"
         )
 
-        db[p["link"]] = {
+        db[
+            paper["link"]
+        ] = {
             "sent_at":
                 datetime.now(
                     timezone.utc
                 ).isoformat()
         }
 
+
     save_db(db)
 
     send_email(
-        "\n".join(body_lines)
+        "\n".join(
+            body_lines
+        )
     )
 
 
