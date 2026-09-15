@@ -1,19 +1,4 @@
 {
-  "http://arxiv.org/abs/2607.15088v1": {
-    "sent_at": "2026-07-17T03:12:13.917100+00:00"
-  },
-  "http://arxiv.org/abs/2607.14841v1": {
-    "sent_at": "2026-07-17T03:12:17.470261+00:00"
-  },
-  "http://arxiv.org/abs/2607.14565v1": {
-    "sent_at": "2026-07-17T03:12:20.688148+00:00"
-  },
-  "https://openalex.org/W7168351958": {
-    "sent_at": "2026-07-17T03:12:24.127713+00:00"
-  },
-  "http://arxiv.org/abs/2607.14382v1": {
-    "sent_at": "2026-07-17T03:12:28.810854+00:00"
-  },
   "http://arxiv.org/abs/2607.15224v1": {
     "sent_at": "2026-07-18T02:51:11.643518+00:00"
   },
@@ -505,5 +490,20 @@
   },
   "https://doi.org/10.5281/zenodo.22730521": {
     "sent_at": "2026-09-14T04:20:46.579525+00:00"
+  },
+  "https://www.semanticscholar.org/paper/c893c843b6a1d2c6363ce18ee854c4e2b9706552": {
+    "sent_at": "2026-09-15T04:21:20.806006+00:00"
+  },
+  "https://www.semanticscholar.org/paper/4f2920d8477a62497b097c37956a4eafd2bbe88d": {
+    "sent_at": "2026-09-15T04:21:23.994917+00:00"
+  },
+  "https://www.semanticscholar.org/paper/bc078db3bb7993beed5e33972f3257727d153233": {
+    "sent_at": "2026-09-15T04:21:27.960466+00:00"
+  },
+  "https://www.semanticscholar.org/paper/51ec456bfca1696d77f83f2df25dc2235c0b079d": {
+    "sent_at": "2026-09-15T04:21:31.368709+00:00"
+  },
+  "https://www.semanticscholar.org/paper/4a0d1a030fb8d20ffeb76713d84cfeeb1f941af9": {
+    "sent_at": "2026-09-15T04:21:35.158988+00:00"
   }
 }
