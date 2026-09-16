@@ -1,19 +1,4 @@
 {
-  "http://arxiv.org/abs/2607.15224v1": {
-    "sent_at": "2026-07-18T02:51:11.643518+00:00"
-  },
-  "http://arxiv.org/abs/2607.11003v1": {
-    "sent_at": "2026-07-18T02:51:14.663316+00:00"
-  },
-  "http://arxiv.org/abs/2607.11002v1": {
-    "sent_at": "2026-07-18T02:51:17.543507+00:00"
-  },
-  "https://openalex.org/W7168265796": {
-    "sent_at": "2026-07-18T02:51:22.497284+00:00"
-  },
-  "http://arxiv.org/abs/2607.15230v1": {
-    "sent_at": "2026-07-18T02:51:25.611024+00:00"
-  },
   "http://arxiv.org/abs/2607.14978v1": {
     "sent_at": "2026-07-19T03:20:39.167705+00:00"
   },
@@ -505,5 +490,20 @@
   },
   "https://www.semanticscholar.org/paper/4a0d1a030fb8d20ffeb76713d84cfeeb1f941af9": {
     "sent_at": "2026-09-15T04:21:35.158988+00:00"
+  },
+  "https://doi.org/10.3390/cryst16090589": {
+    "sent_at": "2026-09-16T04:10:57.258891+00:00"
+  },
+  "https://www.semanticscholar.org/paper/141cdd6f8082164c0b305e710f897b757bd2c368": {
+    "sent_at": "2026-09-16T04:11:00.881356+00:00"
+  },
+  "https://www.semanticscholar.org/paper/6d406c33d7beb26d191c51c9fec80e76370b3fe3": {
+    "sent_at": "2026-09-16T04:11:04.656301+00:00"
+  },
+  "http://arxiv.org/abs/1809.09862v1": {
+    "sent_at": "2026-09-16T04:11:08.011942+00:00"
+  },
+  "http://arxiv.org/abs/2109.13231v1": {
+    "sent_at": "2026-09-16T04:11:12.037081+00:00"
   }
 }
