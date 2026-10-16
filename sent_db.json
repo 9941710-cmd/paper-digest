@@ -703,5 +703,20 @@
   },
   "http://arxiv.org/abs/2510.20132v1": {
     "sent_at": "2026-10-15T03:59:32.802903+00:00"
+  },
+  "https://www.semanticscholar.org/paper/72afaefaf62c837264a66a912079bed565e30e36": {
+    "sent_at": "2026-10-16T03:56:17.436914+00:00"
+  },
+  "https://doi.org/10.1364/oe.609915": {
+    "sent_at": "2026-10-16T03:56:17.436914+00:00"
+  },
+  "https://www.semanticscholar.org/paper/ea348ec36428c7384e465e69e53ba081169a56c5": {
+    "sent_at": "2026-10-16T03:56:17.436914+00:00"
+  },
+  "https://www.semanticscholar.org/paper/449c6511753c88bb4001eae6e07cc78a1eeb0499": {
+    "sent_at": "2026-10-16T03:56:17.436914+00:00"
+  },
+  "http://arxiv.org/abs/2506.13204v2": {
+    "sent_at": "2026-10-16T03:56:17.436914+00:00"
   }
 }
