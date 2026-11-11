@@ -1,7 +1,4 @@
 {
-  "https://openalex.org/W7202097256": {
-    "sent_at": "2026-08-13T02:22:37.730973+00:00"
-  },
   "https://openalex.org/W7202208080": {
     "sent_at": "2026-08-15T01:27:49.967299+00:00"
   },
@@ -1075,5 +1072,20 @@
   },
   "http://arxiv.org/abs/2512.00241v1": {
     "sent_at": "2026-11-10T06:52:28.263993+00:00"
+  },
+  "https://doi.org/10.1364/oe.613972": {
+    "sent_at": "2026-11-11T05:31:10.516790+00:00"
+  },
+  "https://www.semanticscholar.org/paper/c6fd19d3cfbf28e99809d08cca11fd9c7132fdab": {
+    "sent_at": "2026-11-11T05:31:10.516790+00:00"
+  },
+  "https://www.semanticscholar.org/paper/058a3aec5e99f75d2ee80845cc26ccf6764d1fa1": {
+    "sent_at": "2026-11-11T05:31:10.516790+00:00"
+  },
+  "https://www.semanticscholar.org/paper/b1888aaf9fe3efafbdb3a6d27aa56ac6dbec2eda": {
+    "sent_at": "2026-11-11T05:31:10.516790+00:00"
+  },
+  "https://www.semanticscholar.org/paper/ddcae3392b8ed9ce7f720990c829cc1e1848779e": {
+    "sent_at": "2026-11-11T05:31:10.516790+00:00"
   }
 }
